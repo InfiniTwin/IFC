@@ -9,7 +9,20 @@ namespace IFC {
 		static void RegisterComponents(flecs::world& world);
 	};
 
-	struct Id { FString Value; };
-	struct Name { FString Value; };
-	struct Class { FString Value; };
+	// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
+	struct Opacity { float Value; };
+	struct Class { FString Code, Uri; };
+	struct Material { FString Code, Uri; };
+
+	// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/prop@v5a.ifcx
+	struct IsExternal {};
+	struct Volume { float Value; };
+	struct Height { float Value; };
+	struct Station { float Value; };
+	struct TypeName { FString Value; };
+
+	// https://ifcx.dev/@standards.buildingsmart.org/ifc/ifc-mat/prop@v1.0.0.ifcx
+	struct StrengthClass { FString Value; };
+	struct MoistureContent { float Value; };
+	struct MassDensity { float Value; };
 }
