@@ -33,6 +33,23 @@ namespace IFC {
 		LoadIFCFile(world, "A:/InfiniTwinOrg/IFC5-development/examples/Hello Wall/hello-wall.ifcx");
 	}
 
+	FString FormatUUIDs(const FString& input) {
+		FString output = input;
+
+		// Match UUIDs in the form xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+		const FRegexPattern uuidPattern(TEXT(R"(([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}))"));
+		FRegexMatcher matcher(uuidPattern, output);
+
+		while (matcher.FindNext()) {
+			FString fullMatch = matcher.GetCaptureGroup(0);
+			FString cleanedUuid = fullMatch.Replace(TEXT("-"), TEXT(""));
+			FString formattedUuid = FString::Printf(TEXT("ID%s"), *cleanedUuid);
+			output = output.Replace(*fullMatch, *formattedUuid, ESearchCase::IgnoreCase);
+		}
+
+		return output;
+	}
+
 	using namespace rapidjson;
 	FString BuildHierarchyTree(const rapidjson::Value* node, const TMap<FString, const rapidjson::Value*>& pathToObjectMap, int32 depth) {
 		if (!node || !node->HasMember("path") || !(*node)["path"].IsString())
@@ -41,17 +58,14 @@ namespace IFC {
 		auto indent = TEXT('\t');
 		FString nodeIndent = FString::ChrN(depth, indent);
 		FString innerIndent = FString::ChrN(depth + 1, indent);
-		FString leafIndent = FString::ChrN(depth + 2, indent);
 
 		FString path = UTF8_TO_TCHAR((*node)["path"].GetString());
 
 		FString output;
 		if (depth == 0) // Root node: use path as header			
 			output += FString::Printf(TEXT("%s%s {\n"), *nodeIndent, *path);
-		else // Child node: name is printed by parent, just open block			
-			output += TEXT("{\n");
-
-		output += FString::Printf(TEXT("%sId: {\"%s\"}\n"), *innerIndent, *path);
+		else // Child node: name is printed by parent, just open block
+			output += FString::Printf(TEXT(": %s {\n"), *path);
 
 		if (node->HasMember("children") && (*node)["children"].IsObject()) {
 			const auto& children = (*node)["children"];
@@ -62,14 +76,12 @@ namespace IFC {
 				FString childPath = UTF8_TO_TCHAR(itr->value.GetString());
 
 				const rapidjson::Value* const* childObjPtr = pathToObjectMap.Find(childPath);
-				output += FString::Printf(TEXT("%s%s "), *innerIndent, *childName);
+				output += FString::Printf(TEXT("%s%s"), *innerIndent, *childName);
 
 				if (childObjPtr && *childObjPtr)
 					output += BuildHierarchyTree(*childObjPtr, pathToObjectMap, depth + 1);
-				else { // Leaf
-					output += FString::Printf(TEXT("{\n%sId: {\"%s\"}\n"), *leafIndent, *childPath);
-					output += FString::Printf(TEXT("%s}\n"), *FString::ChrN(depth + 1, indent));
-				}
+				else // Leaf
+					output += FString::Printf(TEXT(": %s {}\n"), *childPath);
 			}
 		}
 
@@ -97,10 +109,16 @@ namespace IFC {
 		TArray<const Value*> rootObjects;
 		TArray<const Value*> childObjects;
 		TSet<FString> allChildPaths;
+		TMap<FString, int32> pathCounts;
 
 		// Step 1: Find all objects with "children" and collect child paths
 		for (SizeType i = 0; i < dataArray.Size(); ++i) {
 			const Value& item = dataArray[i];
+
+			if (item.HasMember("path") && item["path"].IsString()) {
+				FString path = UTF8_TO_TCHAR(item["path"].GetString());
+				pathCounts.FindOrAdd(path)++;
+			}
 
 			if (item.HasMember("children") && item["children"].IsObject()) {
 				hierarchyObjects.Add(&item);
@@ -133,19 +151,38 @@ namespace IFC {
 			}
 		}
 
-		// Now create the map from all hierarchyObjects (root + child)
-		TMap<FString, const rapidjson::Value*> pathToObjectMap;
-		for (const rapidjson::Value* obj : hierarchyObjects) {
+		// Step 4: Map all hierarchy objects
+		TMap<FString, const Value*> pathToObjectMap;
+		for (const Value* obj : hierarchyObjects) {
 			if (obj->HasMember("path") && (*obj)["path"].IsString()) {
 				FString path = UTF8_TO_TCHAR((*obj)["path"].GetString());
 				pathToObjectMap.Add(path, obj);
 			}
 		}
 
-		// Now use this to build the hierarchy recursively
+		// Step 5: Find the main root (its path appears only once in the entire data)
+		const Value* mainRoot = nullptr;
+		for (const Value* root : rootObjects) {
+			if (root->HasMember("path") && (*root)["path"].IsString()) {
+				FString path = UTF8_TO_TCHAR((*root)["path"].GetString());
+				if (pathCounts.Contains(path) && pathCounts[path] == 1) {
+					mainRoot = root;
+					break;
+				}
+			}
+		}
+
+		// Step 6: Output all rootObjects, mainRoot last, prefixed with "prefab " if not mainRoot
 		FString result;
 		for (const Value* root : rootObjects) {
+			if (root == mainRoot) {
+				continue; // Skip for now, append last
+			}
+			result += TEXT("prefab ");
 			result += BuildHierarchyTree(root, pathToObjectMap, 0);
+		}
+		if (mainRoot) {
+			result += BuildHierarchyTree(mainRoot, pathToObjectMap, 0);
 		}
 
 		return result;
@@ -153,10 +190,10 @@ namespace IFC {
 
 	void LoadIFCFile(flecs::world& world, const FString& path) {
 		auto data = Assets::LoadTextFile(path);
-
-		FString hierarchies = GetHierarchies(data);
-		UE_LOG(LogTemp, Log, TEXT("Hierarchies:\n%s"), *hierarchies);
-
+		auto formated = FormatUUIDs(data);
 		free(data);
+
+		FString hierarchies = GetHierarchies(formated);
+		UE_LOG(LogTemp, Log, TEXT("Hierarchies:\n%s"), *hierarchies);
 	}
 }
