@@ -6,6 +6,8 @@
 namespace IFC {
 	void IFCFeature::RegisterComponents(flecs::world& world) {
 		using namespace ECS;
-		world.component<Name>().member<FString>(VALUE);
+		world.component<Id>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<Name>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<Class>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 	}
 }

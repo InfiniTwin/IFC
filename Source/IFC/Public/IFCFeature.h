@@ -9,5 +9,7 @@ namespace IFC {
 		static void RegisterComponents(flecs::world& world);
 	};
 
+	struct Id { FString Value; };
 	struct Name { FString Value; };
+	struct Class { FString Value; };
 }

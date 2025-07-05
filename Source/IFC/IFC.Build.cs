@@ -18,6 +18,7 @@ public class IFC : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[] {
 			"CoreUObject",
 			"Engine",
+			"Json",
 		});
 	}
 }
