@@ -8,6 +8,8 @@ namespace IFC {
 		using namespace ECS;
 
 		// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
+		//world.component<TArray<float>>().opaque(ArrayReflection<float>);
+		world.component<DiffuseColor>().member<TArray<float>>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<Opacity>().member<float>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<Class>()
 			.member<FString>(MEMBER(Class::Code))

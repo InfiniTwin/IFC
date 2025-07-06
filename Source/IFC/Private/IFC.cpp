@@ -52,7 +52,7 @@ namespace IFC {
 
 	using namespace rapidjson;
 
-	bool Include(const FString& fullAttribute) {
+	bool IncludeAttribute(const FString& fullAttribute) {
 		for (const TCHAR* attribute : AllowedAttributes) {
 			int32 attrLen = fullAttribute.Len();
 			int32 allowedLen = FCString::Strlen(attribute);
@@ -68,7 +68,7 @@ namespace IFC {
 		return false;
 	}
 
-	FString TrimAndUppercaseAttributeName(const FString& fullName) {
+	FString FormatAttributeName(const FString& fullName) {
 		FString trimmed;
 		if (fullName.Contains(TEXT("::"))) {
 			int32 idx;
@@ -85,6 +85,91 @@ namespace IFC {
 			trimmed[0] = first;
 		}
 		return trimmed;
+	}
+
+	FString ProcessAttributes(const Value& attributes, const TArray<FString>& filteredAttrNames) {
+		FString result;
+
+		for (const FString& attrName : filteredAttrNames) {
+			FTCHARToUTF8 utf8AttrName(*attrName);
+			const char* attrNameUtf8 = utf8AttrName.Get();
+
+			auto memberItr = attributes.FindMember(attrNameUtf8);
+			if (memberItr == attributes.MemberEnd())
+				continue;
+
+			const Value& attrValue = memberItr->value;
+
+			FString name = FormatAttributeName(attrName);
+
+			// If attribute value is exactly boolean true => output tag only
+			if (attrValue.IsBool() && attrValue.GetBool() == true) {
+				result += FString::Printf(TEXT("\t%s\n"), *name);
+				continue;
+			}
+
+			result += FString::Printf(TEXT("\t%s: {"), *name);
+
+			// Handle different attribute types
+			if (attrValue.IsObject()) {
+				bool firstValue = true;
+				for (auto valItr = attrValue.MemberBegin(); valItr != attrValue.MemberEnd(); ++valItr) {
+					if (!valItr->value.IsString())
+						continue;
+
+					if (!firstValue) result += TEXT(", ");
+					firstValue = false;
+
+					result += FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(valItr->value.GetString())));
+				}
+			} else if (attrValue.IsArray()) {
+				result += TEXT("[");
+
+				bool firstValue = true;
+				for (SizeType idx = 0; idx < attrValue.Size(); ++idx) {
+					if (!firstValue)
+						result += TEXT(", ");
+					firstValue = false;
+
+					const Value& arrVal = attrValue[idx];
+					if (arrVal.IsString()) {
+						result += FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(arrVal.GetString())));
+					} else if (arrVal.IsNumber()) {
+						if (arrVal.IsDouble() || arrVal.IsFloat()) {
+							result += FString::SanitizeFloat(arrVal.GetDouble());
+						} else if (arrVal.IsInt64()) {
+							result += FString::Printf(TEXT("%lld"), arrVal.GetInt64());
+						} else {
+							result += FString::Printf(TEXT("%d"), arrVal.GetInt());
+						}
+					} else if (arrVal.IsBool()) {
+						result += arrVal.GetBool() ? TEXT("true") : TEXT("false");
+					} else {
+						result += TEXT("\"UnsupportedType\"");
+					}
+				}
+
+				result += TEXT("]");
+			} else if (attrValue.IsString()) {
+				result += FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(attrValue.GetString())));
+			} else if (attrValue.IsNumber()) {
+				if (attrValue.IsDouble() || attrValue.IsFloat()) {
+					result += FString::SanitizeFloat(attrValue.GetDouble());
+				} else if (attrValue.IsInt64()) {
+					result += FString::Printf(TEXT("%lld"), attrValue.GetInt64());
+				} else {
+					result += FString::Printf(TEXT("%d"), attrValue.GetInt());
+				}
+			} else if (attrValue.IsBool()) {
+				result += attrValue.GetBool() ? TEXT("true") : TEXT("false");
+			} else {
+				result += TEXT("\"UnsupportedType\"");
+			}
+
+			result += TEXT("}\n");
+		}
+
+		return result;
 	}
 
 	FString GetPrefabs(const Value& data) {
@@ -107,97 +192,22 @@ namespace IFC {
 			TArray<FString> filteredAttrNames;
 			for (auto itr = attributes.MemberBegin(); itr != attributes.MemberEnd(); ++itr) {
 				FString attrName = UTF8_TO_TCHAR(itr->name.GetString());
-				if (Include(attrName)) {
+				if (IncludeAttribute(attrName)) {
 					filteredAttrNames.Add(attrName);
 				}
 			}
 
 			if (filteredAttrNames.Num() == 0)
-				continue; // skip prefab with no allowed attributes
+				continue;
 
-			FString path = obj.HasMember("path") && obj["path"].IsString() ? UTF8_TO_TCHAR(obj["path"].GetString()) : TEXT("");
+			FString path = obj.HasMember("path") && obj["path"].IsString()
+				? UTF8_TO_TCHAR(obj["path"].GetString())
+				: TEXT("");
 
-			// Start prefab block line
 			result += FString::Printf(TEXT("prefab [IFC].%s {\n"), *path);
 
-			// For each filtered attribute output trimmed name and values
-			for (const FString& attrName : filteredAttrNames) {
-				FTCHARToUTF8 utf8AttrName(*attrName);
-				const char* attrNameUtf8 = utf8AttrName.Get();
-
-				auto memberItr = attributes.FindMember(attrNameUtf8);
-				if (memberItr == attributes.MemberEnd())
-					continue;
-
-				const Value& attrValue = memberItr->value;
-
-				FString trimmedName = TrimAndUppercaseAttributeName(attrName);
-
-				// If attribute value is exactly boolean true => output tag only
-				if (attrValue.IsBool() && attrValue.GetBool() == true) {
-					result += FString::Printf(TEXT("\t%s\n"), *trimmedName);
-					continue; // skip further value output
-				}
-
-				result += FString::Printf(TEXT("\t%s: { "), *trimmedName);
-
-				// Existing handling for other types follows here
-				if (attrValue.IsObject()) {
-					bool firstValue = true;
-					for (auto valItr = attrValue.MemberBegin(); valItr != attrValue.MemberEnd(); ++valItr) {
-						if (!valItr->value.IsString())
-							continue;
-
-						FString val = UTF8_TO_TCHAR(valItr->value.GetString());
-						if (!firstValue)
-							result += TEXT(", ");
-						firstValue = false;
-
-						result += FString::Printf(TEXT("\"%s\""), *val);
-					}
-				} else if (attrValue.IsArray()) {
-					bool firstValue = true;
-					for (SizeType idx = 0; idx < attrValue.Size(); ++idx) {
-						if (!firstValue)
-							result += TEXT(", ");
-						firstValue = false;
-
-						const Value& arrVal = attrValue[idx];
-						if (arrVal.IsString()) {
-							result += FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(arrVal.GetString())));
-						} else if (arrVal.IsNumber()) {
-							if (arrVal.IsDouble() || arrVal.IsFloat()) {
-								result += FString::SanitizeFloat(arrVal.GetDouble());
-							} else if (arrVal.IsInt64()) {
-								result += FString::Printf(TEXT("%lld"), arrVal.GetInt64());
-							} else {
-								result += FString::Printf(TEXT("%d"), arrVal.GetInt());
-							}
-						} else if (arrVal.IsBool()) {
-							result += arrVal.GetBool() ? TEXT("true") : TEXT("false");
-						} else {
-							result += TEXT("\"UnsupportedType\"");
-						}
-					}
-				} else if (attrValue.IsString()) {
-					result += FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(attrValue.GetString())));
-				} else if (attrValue.IsNumber()) {
-					if (attrValue.IsDouble() || attrValue.IsFloat()) {
-						result += FString::SanitizeFloat(attrValue.GetDouble());
-					} else if (attrValue.IsInt64()) {
-						result += FString::Printf(TEXT("%lld"), attrValue.GetInt64());
-					} else {
-						result += FString::Printf(TEXT("%d"), attrValue.GetInt());
-					}
-				} else if (attrValue.IsBool()) {
-					result += attrValue.GetBool() ? TEXT("true") : TEXT("false");
-				} else {
-					result += TEXT("\"UnsupportedType\"");
-				}
-
-				result += TEXT(" }\n");
-			}
-
+			// Process attribute block
+			result += ProcessAttributes(attributes, filteredAttrNames);
 
 			result += TEXT("}\n");
 		}

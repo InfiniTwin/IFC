@@ -22,7 +22,7 @@ namespace IFC {
 	// List of allowed attributes / schemas
 	constexpr const TCHAR* AllowedAttributes[] = {
 		// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
-		//TEXT("diffuseColor"),
+		TEXT("diffuseColor"),
 		TEXT("opacity"),
 		TEXT("class"),
 		//TEXT("spaceBoundary"),
@@ -56,7 +56,8 @@ namespace IFC {
 
 	FString FormatUUIDs(const FString& input);
 
-	bool Include(const FString& attrName);
+	bool IncludeAttribute(const FString& attrName);
+	FString ProcessAttributes(const rapidjson::Value& attributes, const TArray<FString>& filteredAttrNames);
 	FString GetPrefabs(const rapidjson::Value& data);
 
 	FString BuildHierarchyTree(const rapidjson::Value* root, const TMap<FString, const rapidjson::Value*>& pathToObjectMap, int32 depth = 0);
