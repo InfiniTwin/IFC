@@ -52,10 +52,18 @@ namespace IFC {
 
 	using namespace rapidjson;
 
-	bool IsAllowedSchema(const FString& attrName) {
-		for (const TCHAR* allowed : AllowedSchemas) {
-			if (attrName.Equals(allowed, ESearchCase::IgnoreCase))
-				return true;
+	bool Include(const FString& fullAttribute) {
+		for (const TCHAR* attribute : AllowedAttributes) {
+			int32 attrLen = fullAttribute.Len();
+			int32 allowedLen = FCString::Strlen(attribute);
+
+			if (attrLen >= allowedLen) {
+				const TCHAR* fullStr = *fullAttribute;
+				const TCHAR* attrSuffix = fullStr + (attrLen - allowedLen);
+
+				if (FCString::Strcmp(attrSuffix, attribute) == 0)
+					return true;
+			}
 		}
 		return false;
 	}
@@ -99,7 +107,7 @@ namespace IFC {
 			TArray<FString> filteredAttrNames;
 			for (auto itr = attributes.MemberBegin(); itr != attributes.MemberEnd(); ++itr) {
 				FString attrName = UTF8_TO_TCHAR(itr->name.GetString());
-				if (IsAllowedSchema(attrName)) {
+				if (Include(attrName)) {
 					filteredAttrNames.Add(attrName);
 				}
 			}
