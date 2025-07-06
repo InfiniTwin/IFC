@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "IFCFeature.h"
-#include <ECS.h>
+#include "ECS.h"
 
 namespace IFC {
 	void IFCFeature::RegisterComponents(flecs::world& world) {
@@ -31,5 +31,13 @@ namespace IFC {
 		world.component<StrengthClass>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<MoistureContent>().member<float>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<MassDensity>().member<float>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<GWP>()
+			.member<float>(MEMBER(GWP::A1_A3))
+			.member<float>(MEMBER(GWP::A4))
+			.member<float>(MEMBER(GWP::A5))
+			.member<float>(MEMBER(GWP::C2))
+			.member<float>(MEMBER(GWP::C3))
+			.member<float>(MEMBER(GWP::D))
+			.add(flecs::OnInstantiate, flecs::Inherit);
 	}
 }

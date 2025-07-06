@@ -4,7 +4,6 @@
 
 #include "Modules/ModuleManager.h"
 #include <flecs.h>
-#include "rapidjson/document.h"
 
 class FIFCModule : public IModuleInterface {
 public:
@@ -17,9 +16,9 @@ public:
 namespace IFC {
 	IFC_API FString& Scope();
 
-	IFC_API void Register(flecs::world& world);
-
-	// List of allowed attributes / schemas
+	/// <summary>
+	/// List of allowed attributes / schemas
+	/// </summary>
 	constexpr const TCHAR* AllowedAttributes[] = {
 		// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
 		TEXT("diffuseColor"),
@@ -45,7 +44,7 @@ namespace IFC {
 		TEXT("StrengthClass"),
 		TEXT("MoistureContent"),
 		TEXT("MassDensity"),
-		//TEXT("GWP"),
+		TEXT("GWP"),
 
 		// https://ifcx.dev/@openusd.org/usd@v1.ifcx
 		//TEXT("mesh"),
@@ -54,14 +53,7 @@ namespace IFC {
 		//TEXT("basiscurves"),
 	};
 
-	FString FormatUUIDs(const FString& input);
+	IFC_API void Register(flecs::world& world);
 
-	bool IncludeAttribute(const FString& attrName);
-	FString ProcessAttributes(const rapidjson::Value& attributes, const TArray<FString>& filteredAttrNames);
-	FString GetPrefabs(const rapidjson::Value& data);
-
-	FString BuildHierarchyTree(const rapidjson::Value* root, const TMap<FString, const rapidjson::Value*>& pathToObjectMap, int32 depth = 0);
-	FString GetHierarchies(const rapidjson::Value& data);
-
-	void LoadIFCFile(flecs::world& world, const FString& path);
+	IFC_API void LoadIFCFile(flecs::world& world, const FString& path);
 }

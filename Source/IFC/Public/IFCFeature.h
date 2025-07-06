@@ -26,4 +26,11 @@ namespace IFC {
 	struct StrengthClass { FString Value; };
 	struct MoistureContent { float Value; };
 	struct MassDensity { float Value; };
+	struct GWP { float A1_A3, A4, A5, C2, C3, D; };
+
+	// https://ifcx.dev/@openusd.org/usd@v1.ifcx
+	struct Mesh {
+		TArray<int> FaceVertexIndices;
+		TArray<float> Points;
+	};
 }

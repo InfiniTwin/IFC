@@ -1,9 +1,11 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "IFC.h"
-#include <IFCFeature.h>
-#include <Assets.h>
+#include "IFCFeature.h"
+#include "Assets.h"
+#include "ECS.h"
 #include "Containers/Map.h"
+#include "rapidjson/document.h"
 #include "rapidjson/error/en.h"
 
 #define LOCTEXT_NAMESPACE "FIFCModule"
@@ -29,8 +31,6 @@ namespace IFC {
 
 	void Register(flecs::world& world) {
 		IFCFeature::RegisterComponents(world);
-
-		LoadIFCFile(world, "A:/InfiniTwinOrg/IFC5-development/examples/Hello Wall/hello-wall.ifcx");
 	}
 
 	FString FormatUUIDs(const FString& input) {
@@ -86,6 +86,24 @@ namespace IFC {
 		}
 		return trimmed;
 	}
+	
+	FString FormatAttributeValue(const Value& val) {
+		if (val.IsString()) {
+			return FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(val.GetString())));
+		} else if (val.IsNumber()) {
+			if (val.IsDouble() || val.IsFloat()) {
+				return FString::SanitizeFloat(val.GetDouble());
+			} else if (val.IsInt64()) {
+				return FString::Printf(TEXT("%lld"), val.GetInt64());
+			} else {
+				return FString::Printf(TEXT("%d"), val.GetInt());
+			}
+		} else if (val.IsBool()) {
+			return val.GetBool() ? TEXT("true") : TEXT("false");
+		} else {
+			return TEXT("\"UNKNOWN\"");
+		}
+	}
 
 	FString ProcessAttributes(const Value& attributes, const TArray<FString>& filteredAttrNames) {
 		FString result;
@@ -99,7 +117,6 @@ namespace IFC {
 				continue;
 
 			const Value& attrValue = memberItr->value;
-
 			FString name = FormatAttributeName(attrName);
 
 			// If attribute value is exactly boolean true => output tag only
@@ -110,60 +127,26 @@ namespace IFC {
 
 			result += FString::Printf(TEXT("\t%s: {"), *name);
 
-			// Handle different attribute types
 			if (attrValue.IsObject()) {
-				bool firstValue = true;
-				for (auto valItr = attrValue.MemberBegin(); valItr != attrValue.MemberEnd(); ++valItr) {
-					if (!valItr->value.IsString())
-						continue;
+				bool first = true;
+				for (auto it = attrValue.MemberBegin(); it != attrValue.MemberEnd(); ++it) {
+					if (!first) result += TEXT(", ");
+					first = false;
 
-					if (!firstValue) result += TEXT(", ");
-					firstValue = false;
-
-					result += FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(valItr->value.GetString())));
+					result += FormatAttributeValue(it->value);
 				}
 			} else if (attrValue.IsArray()) {
 				result += TEXT("[");
+				bool first = true;
+				for (SizeType i = 0; i < attrValue.Size(); ++i) {
+					if (!first) result += TEXT(", ");
+					first = false;
 
-				bool firstValue = true;
-				for (SizeType idx = 0; idx < attrValue.Size(); ++idx) {
-					if (!firstValue)
-						result += TEXT(", ");
-					firstValue = false;
-
-					const Value& arrVal = attrValue[idx];
-					if (arrVal.IsString()) {
-						result += FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(arrVal.GetString())));
-					} else if (arrVal.IsNumber()) {
-						if (arrVal.IsDouble() || arrVal.IsFloat()) {
-							result += FString::SanitizeFloat(arrVal.GetDouble());
-						} else if (arrVal.IsInt64()) {
-							result += FString::Printf(TEXT("%lld"), arrVal.GetInt64());
-						} else {
-							result += FString::Printf(TEXT("%d"), arrVal.GetInt());
-						}
-					} else if (arrVal.IsBool()) {
-						result += arrVal.GetBool() ? TEXT("true") : TEXT("false");
-					} else {
-						result += TEXT("\"UnsupportedType\"");
-					}
+					result += FormatAttributeValue(attrValue[i]);
 				}
-
 				result += TEXT("]");
-			} else if (attrValue.IsString()) {
-				result += FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(attrValue.GetString())));
-			} else if (attrValue.IsNumber()) {
-				if (attrValue.IsDouble() || attrValue.IsFloat()) {
-					result += FString::SanitizeFloat(attrValue.GetDouble());
-				} else if (attrValue.IsInt64()) {
-					result += FString::Printf(TEXT("%lld"), attrValue.GetInt64());
-				} else {
-					result += FString::Printf(TEXT("%d"), attrValue.GetInt());
-				}
-			} else if (attrValue.IsBool()) {
-				result += attrValue.GetBool() ? TEXT("true") : TEXT("false");
 			} else {
-				result += TEXT("\"UnsupportedType\"");
+				result += FormatAttributeValue(attrValue);
 			}
 
 			result += TEXT("}\n");
@@ -361,5 +344,7 @@ namespace IFC {
 
 		FString hierarchies = GetHierarchies(data);
 		UE_LOG(LogTemp, Log, TEXT(">>> Hierarchies:\n%s"), *hierarchies);
+
+		ECS::RunScript(world, path, prefabs);
 	}
 }
