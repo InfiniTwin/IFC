@@ -100,6 +100,32 @@ namespace IFC {
 			}
 		} else if (val.IsBool()) {
 			return val.GetBool() ? TEXT("true") : TEXT("false");
+		} else if (val.IsArray()) {
+			FString result;
+			if (val.Size() > 0 && val[0].IsArray()) {
+				result += TEXT("[");
+				for (SizeType i = 0; i < val.Size(); ++i) {
+					if (i > 0) result += TEXT(", ");
+					result += TEXT("{");
+					for (SizeType j = 0; j < val[i].Size(); ++j) {
+						if (j > 0) result += TEXT(", ");
+						result += FormatAttributeValue(val[i][j]);
+					}
+					result += TEXT("}");
+				}
+				result += TEXT("]");
+			} else {
+				result += TEXT("[");
+				for (SizeType i = 0; i < val.Size(); ++i) {
+					if (i > 0) result += TEXT(", ");
+					result += FormatAttributeValue(val[i]);
+				}
+				result += TEXT("]");
+			}
+			return result;
+		} else if (val.IsObject()) {
+			// Optional: You could add support for printing key:value pairs here.
+			return TEXT("\"{object}\"");
 		} else {
 			return TEXT("\"UNKNOWN\"");
 		}
@@ -119,7 +145,6 @@ namespace IFC {
 			const Value& attrValue = memberItr->value;
 			FString name = FormatAttributeName(attrName);
 
-			// If attribute value is exactly boolean true => output tag only
 			if (attrValue.IsBool() && attrValue.GetBool() == true) {
 				result += FString::Printf(TEXT("\t%s\n"), *name);
 				continue;
@@ -132,17 +157,29 @@ namespace IFC {
 				for (auto it = attrValue.MemberBegin(); it != attrValue.MemberEnd(); ++it) {
 					if (!first) result += TEXT(", ");
 					first = false;
-
 					result += FormatAttributeValue(it->value);
 				}
 			} else if (attrValue.IsArray()) {
 				result += TEXT("[");
-				bool first = true;
+				bool firstOuter = true;
 				for (SizeType i = 0; i < attrValue.Size(); ++i) {
-					if (!first) result += TEXT(", ");
-					first = false;
+					const Value& innerVal = attrValue[i];
 
-					result += FormatAttributeValue(attrValue[i]);
+					if (!firstOuter) result += TEXT(", ");
+					firstOuter = false;
+
+					if (innerVal.IsArray()) {
+						result += TEXT("{");
+						bool firstInner = true;
+						for (SizeType j = 0; j < innerVal.Size(); ++j) {
+							if (!firstInner) result += TEXT(", ");
+							firstInner = false;
+							result += FormatAttributeValue(innerVal[j]);
+						}
+						result += TEXT("}");
+					} else {
+						result += FormatAttributeValue(innerVal);
+					}
 				}
 				result += TEXT("]");
 			} else {

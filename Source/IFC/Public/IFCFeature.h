@@ -31,6 +31,6 @@ namespace IFC {
 	// https://ifcx.dev/@openusd.org/usd@v1.ifcx
 	struct Mesh {
 		TArray<int> FaceVertexIndices;
-		TArray<float> Points;
+		TArray<FVector3f> Points;
 	};
 }
