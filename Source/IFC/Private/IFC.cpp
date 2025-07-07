@@ -31,6 +31,8 @@ namespace IFC {
 
 	void Register(flecs::world& world) {
 		IFCFeature::RegisterComponents(world);
+
+		LoadIFCFile(world, "A:/InfiniTwinOrg/IFC5-development/examples/Hello Wall/hello-wall.ifcx");
 	}
 
 	FString FormatUUIDs(const FString& input) {
@@ -52,16 +54,30 @@ namespace IFC {
 
 	using namespace rapidjson;
 
+#pragma region  Attributes
+
 	bool IncludeAttribute(const FString& fullAttribute) {
-		for (const TCHAR* attribute : AllowedAttributes) {
+		for (const FString& attribute : AllowedAttributes) {
 			int32 attrLen = fullAttribute.Len();
-			int32 allowedLen = FCString::Strlen(attribute);
+			int32 allowedLen = attribute.Len();
 
 			if (attrLen >= allowedLen) {
-				const TCHAR* fullStr = *fullAttribute;
-				const TCHAR* attrSuffix = fullStr + (attrLen - allowedLen);
+				FString attrSuffix = fullAttribute.Right(allowedLen);
+				if (attrSuffix == attribute)
+					return true;
+			}
+		}
+		return false;
+	}
 
-				if (FCString::Strcmp(attrSuffix, attribute) == 0)
+	bool IsVectorAttribute(const FString& fullAttribute) {
+		for (const FString& attribute : AllowedVectorAttributes) {
+			int32 attrLen = fullAttribute.Len();
+			int32 allowedLen = attribute.Len();
+
+			if (attrLen >= allowedLen) {
+				FString attrSuffix = fullAttribute.Right(allowedLen);
+				if (attrSuffix == attribute)
 					return true;
 			}
 		}
@@ -73,68 +89,78 @@ namespace IFC {
 		if (fullName.Contains(TEXT("::"))) {
 			int32 idx;
 			fullName.FindLastChar(':', idx);
-			// idx is index of last ':', but double colon, so -1 more for second colon
 			trimmed = fullName.RightChop(idx + 1);
-		} else {
+		}
+		else {
 			trimmed = fullName;
 		}
 
-		// Uppercase first letter
 		if (trimmed.Len() > 0) {
-			TCHAR first = FChar::ToUpper(trimmed[0]);
-			trimmed[0] = first;
+			trimmed[0] = FChar::ToUpper(trimmed[0]);
 		}
 		return trimmed;
 	}
-	
-	FString FormatAttributeValue(const Value& val) {
+
+	FString FormatAttributeValue(const Value& val, bool isInnerArray = false) {
 		if (val.IsString()) {
 			return FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(val.GetString())));
-		} else if (val.IsNumber()) {
+		}
+		else if (val.IsNumber()) {
 			if (val.IsDouble() || val.IsFloat()) {
 				return FString::SanitizeFloat(val.GetDouble());
-			} else if (val.IsInt64()) {
+			}
+			else if (val.IsInt64()) {
 				return FString::Printf(TEXT("%lld"), val.GetInt64());
-			} else {
+			}
+			else {
 				return FString::Printf(TEXT("%d"), val.GetInt());
 			}
-		} else if (val.IsBool()) {
+		}
+		else if (val.IsBool()) {
 			return val.GetBool() ? TEXT("true") : TEXT("false");
-		} else if (val.IsArray()) {
+		}
+		else if (val.IsArray()) {
 			FString result;
-			if (val.Size() > 0 && val[0].IsArray()) {
-				result += TEXT("[");
-				for (SizeType i = 0; i < val.Size(); ++i) {
-					if (i > 0) result += TEXT(", ");
-					result += TEXT("{");
-					for (SizeType j = 0; j < val[i].Size(); ++j) {
-						if (j > 0) result += TEXT(", ");
-						result += FormatAttributeValue(val[i][j]);
-					}
-					result += TEXT("}");
-				}
-				result += TEXT("]");
-			} else {
-				result += TEXT("[");
+
+			if (isInnerArray) {
+				// Inner array: use double curly braces
+				result += TEXT("{{");
 				for (SizeType i = 0; i < val.Size(); ++i) {
 					if (i > 0) result += TEXT(", ");
 					result += FormatAttributeValue(val[i]);
 				}
+				result += TEXT("}}");
+			}
+			else {
+				// Outer array: use square brackets
+				result += TEXT("[");
+				for (SizeType i = 0; i < val.Size(); ++i) {
+					if (i > 0) result += TEXT(", ");
+					// If this element is an array, format it as inner array
+					if (val[i].IsArray()) {
+						result += FormatAttributeValue(val[i], true);
+					}
+					else {
+						result += FormatAttributeValue(val[i]);
+					}
+				}
 				result += TEXT("]");
 			}
 			return result;
-		} else if (val.IsObject()) {
-			// Optional: You could add support for printing key:value pairs here.
+		}
+		else if (val.IsObject()) {
 			return TEXT("\"{object}\"");
-		} else {
+		}
+		else {
 			return TEXT("\"UNKNOWN\"");
 		}
 	}
 
-	FString ProcessAttributes(const Value& attributes, const TArray<FString>& filteredAttrNames) {
+	FString ProcessAttributes(const Value& attributes, const TArray<FString>& filteredAttrNames, TArray<bool> vectors) {
 		FString result;
 
-		for (const FString& attrName : filteredAttrNames) {
+		for (int32 i = 0; i < filteredAttrNames.Num(); ++i) {
+			const FString& attrName = filteredAttrNames[i];
 			FTCHARToUTF8 utf8AttrName(*attrName);
 			const char* attrNameUtf8 = utf8AttrName.Get();
 
@@ -150,6 +176,18 @@ namespace IFC {
 				continue;
 			}
 
+			if (attrValue.IsArray() && vectors[i]) {
+				// Vector attribute: format as {{ ... }}
+				result += FString::Printf(TEXT("\t%s: {{"), *name);
+				for (SizeType j = 0; j < attrValue.Size(); ++j) {
+					if (j > 0) result += TEXT(", ");
+					result += FormatAttributeValue(attrValue[j]);
+				}
+				result += TEXT("}}\n");
+				continue;
+			}
+
+			// Default formatting
 			result += FString::Printf(TEXT("\t%s: {"), *name);
 
 			if (attrValue.IsObject()) {
@@ -159,30 +197,11 @@ namespace IFC {
 					first = false;
 					result += FormatAttributeValue(it->value);
 				}
-			} else if (attrValue.IsArray()) {
-				result += TEXT("[");
-				bool firstOuter = true;
-				for (SizeType i = 0; i < attrValue.Size(); ++i) {
-					const Value& innerVal = attrValue[i];
-
-					if (!firstOuter) result += TEXT(", ");
-					firstOuter = false;
-
-					if (innerVal.IsArray()) {
-						result += TEXT("{");
-						bool firstInner = true;
-						for (SizeType j = 0; j < innerVal.Size(); ++j) {
-							if (!firstInner) result += TEXT(", ");
-							firstInner = false;
-							result += FormatAttributeValue(innerVal[j]);
-						}
-						result += TEXT("}");
-					} else {
-						result += FormatAttributeValue(innerVal);
-					}
-				}
-				result += TEXT("]");
-			} else {
+			}
+			else if (attrValue.IsArray()) {
+				result += FormatAttributeValue(attrValue);
+			}
+			else {
 				result += FormatAttributeValue(attrValue);
 			}
 
@@ -191,6 +210,7 @@ namespace IFC {
 
 		return result;
 	}
+#pragma endregion
 
 	FString GetPrefabs(const Value& data) {
 		if (!data.IsArray())
@@ -210,11 +230,14 @@ namespace IFC {
 
 			// Filter attributes: check if any attribute key is in AllowedSchemas
 			TArray<FString> filteredAttrNames;
+			TArray<bool> vectors;
 			for (auto itr = attributes.MemberBegin(); itr != attributes.MemberEnd(); ++itr) {
 				FString attrName = UTF8_TO_TCHAR(itr->name.GetString());
-				if (IncludeAttribute(attrName)) {
+				bool isVector = IsVectorAttribute(attrName);
+				if (IncludeAttribute(attrName) || isVector) {
 					filteredAttrNames.Add(attrName);
 				}
+				vectors.Add(isVector);
 			}
 
 			if (filteredAttrNames.Num() == 0)
@@ -227,7 +250,7 @@ namespace IFC {
 			result += FString::Printf(TEXT("prefab [IFC].%s {\n"), *path);
 
 			// Process attribute block
-			result += ProcessAttributes(attributes, filteredAttrNames);
+			result += ProcessAttributes(attributes, filteredAttrNames, vectors);
 
 			result += TEXT("}\n");
 		}

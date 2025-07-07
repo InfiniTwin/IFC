@@ -10,7 +10,7 @@ namespace IFC {
 	};
 
 	// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
-	struct DiffuseColor { TArray<float> Value; };
+	struct DiffuseColor { FVector3f Value; };
 	struct Opacity { float Value; };
 	struct Class { FString Code, Uri; };
 	struct Material { FString Code, Uri; };
@@ -33,4 +33,5 @@ namespace IFC {
 		TArray<int> FaceVertexIndices;
 		TArray<FVector3f> Points;
 	};
+	struct Xformop { TArray<FVector4f> Transform; };
 }

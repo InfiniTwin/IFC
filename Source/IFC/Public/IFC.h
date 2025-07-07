@@ -17,11 +17,10 @@ namespace IFC {
 	IFC_API FString& Scope();
 
 	/// <summary>
-	/// List of allowed attributes / schemas
+	/// List of allowed attributes
 	/// </summary>
-	constexpr const TCHAR* AllowedAttributes[] = {
+	static const TSet<FString> AllowedAttributes = {
 		// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
-		TEXT("diffuseColor"),
 		TEXT("opacity"),
 		TEXT("class"),
 		//TEXT("spaceBoundary"),
@@ -49,8 +48,12 @@ namespace IFC {
 		// https://ifcx.dev/@openusd.org/usd@v1.ifcx
 		//TEXT("mesh"),
 		//TEXT("visibility"),
-		//TEXT("xformop"),
+		TEXT("xformop"),
 		//TEXT("basiscurves"),
+	};
+	static const TSet<FString> AllowedVectorAttributes = {
+		// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
+		TEXT("diffuseColor"),
 	};
 
 	IFC_API void Register(flecs::world& world);

@@ -7,7 +7,7 @@ namespace IFC {
 	void IFCFeature::RegisterComponents(flecs::world& world) {
 		using namespace ECS;
 
-		world.component<DiffuseColor>().member<TArray<float>>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<DiffuseColor>().member<FVector3f>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<Opacity>().member<float>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<Class>()
 			.member<FString>(MEMBER(Class::Code))
@@ -39,6 +39,9 @@ namespace IFC {
 		world.component<Mesh>()
 			.member<TArray<float>>(MEMBER(Mesh::FaceVertexIndices))
 			.member<TArray<FVector3f>>(MEMBER(Mesh::Points))
+			.add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<Xformop>()
+			.member<TArray<FVector4f>>(MEMBER(Xformop::Transform))
 			.add(flecs::OnInstantiate, flecs::Inherit);
 	}
 }
