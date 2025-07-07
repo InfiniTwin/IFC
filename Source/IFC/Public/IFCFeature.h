@@ -10,8 +10,7 @@ namespace IFC {
 	};
 
 	// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
-	struct DiffuseColor { FVector3f Value; };
-	struct Opacity { float Value; };
+	struct DiffuseColor { FLinearColor Value; };
 	struct Class { FString Code, Uri; };
 	struct Material { FString Code, Uri; };
 

@@ -7,8 +7,7 @@ namespace IFC {
 	void IFCFeature::RegisterComponents(flecs::world& world) {
 		using namespace ECS;
 
-		world.component<DiffuseColor>().member<FVector3f>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
-		world.component<Opacity>().member<float>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<DiffuseColor>().member<FLinearColor>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<Class>()
 			.member<FString>(MEMBER(Class::Code))
 			.member<FString>(MEMBER(Class::Uri))

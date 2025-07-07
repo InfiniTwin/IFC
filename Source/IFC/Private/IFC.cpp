@@ -31,8 +31,6 @@ namespace IFC {
 
 	void Register(flecs::world& world) {
 		IFCFeature::RegisterComponents(world);
-
-		LoadIFCFile(world, "A:/InfiniTwinOrg/IFC5-development/examples/Hello Wall/hello-wall.ifcx");
 	}
 
 	FString FormatUUIDs(const FString& input) {
@@ -56,13 +54,13 @@ namespace IFC {
 
 #pragma region  Attributes
 
-	bool IncludeAttribute(const FString& fullAttribute) {
-		for (const FString& attribute : AllowedAttributes) {
-			int32 attrLen = fullAttribute.Len();
+	bool HasAttribute(const TSet<FString>& attributes, const FString& name) {
+		for (const FString& attribute : attributes) {
+			int32 attrLen = name.Len();
 			int32 allowedLen = attribute.Len();
 
 			if (attrLen >= allowedLen) {
-				FString attrSuffix = fullAttribute.Right(allowedLen);
+				FString attrSuffix = name.Right(allowedLen);
 				if (attrSuffix == attribute)
 					return true;
 			}
@@ -70,18 +68,16 @@ namespace IFC {
 		return false;
 	}
 
-	bool IsVectorAttribute(const FString& fullAttribute) {
-		for (const FString& attribute : AllowedVectorAttributes) {
-			int32 attrLen = fullAttribute.Len();
-			int32 allowedLen = attribute.Len();
+	bool IncludeAttribute(const FString& attribute) {
+		return HasAttribute(AllowedAttributes, attribute);
+	}
 
-			if (attrLen >= allowedLen) {
-				FString attrSuffix = fullAttribute.Right(allowedLen);
-				if (attrSuffix == attribute)
-					return true;
-			}
-		}
-		return false;
+	bool SkipProcessingAttribute(const FString& attribute) {
+		return HasAttribute(SkipProcessingAttributes, attribute);
+	}
+
+	bool IsVectorAttribute(const FString& attribute) {
+		return HasAttribute(VectorAttributes, attribute);
 	}
 
 	FString FormatAttributeName(const FString& fullName) {
@@ -90,8 +86,7 @@ namespace IFC {
 			int32 idx;
 			fullName.FindLastChar(':', idx);
 			trimmed = fullName.RightChop(idx + 1);
-		}
-		else {
+		} else {
 			trimmed = fullName;
 		}
 
@@ -104,22 +99,17 @@ namespace IFC {
 	FString FormatAttributeValue(const Value& val, bool isInnerArray = false) {
 		if (val.IsString()) {
 			return FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(val.GetString())));
-		}
-		else if (val.IsNumber()) {
+		} else if (val.IsNumber()) {
 			if (val.IsDouble() || val.IsFloat()) {
 				return FString::SanitizeFloat(val.GetDouble());
-			}
-			else if (val.IsInt64()) {
+			} else if (val.IsInt64()) {
 				return FString::Printf(TEXT("%lld"), val.GetInt64());
-			}
-			else {
+			} else {
 				return FString::Printf(TEXT("%d"), val.GetInt());
 			}
-		}
-		else if (val.IsBool()) {
+		} else if (val.IsBool()) {
 			return val.GetBool() ? TEXT("true") : TEXT("false");
-		}
-		else if (val.IsArray()) {
+		} else if (val.IsArray()) {
 			FString result;
 
 			if (isInnerArray) {
@@ -130,8 +120,7 @@ namespace IFC {
 					result += FormatAttributeValue(val[i]);
 				}
 				result += TEXT("}}");
-			}
-			else {
+			} else {
 				// Outer array: use square brackets
 				result += TEXT("[");
 				for (SizeType i = 0; i < val.Size(); ++i) {
@@ -139,21 +128,32 @@ namespace IFC {
 					// If this element is an array, format it as inner array
 					if (val[i].IsArray()) {
 						result += FormatAttributeValue(val[i], true);
-					}
-					else {
+					} else {
 						result += FormatAttributeValue(val[i]);
 					}
 				}
 				result += TEXT("]");
 			}
 			return result;
-		}
-		else if (val.IsObject()) {
+		} else if (val.IsObject()) {
 			return TEXT("\"{object}\"");
-		}
-		else {
+		} else {
 			return TEXT("\"UNKNOWN\"");
 		}
+	}
+
+	FString GetOpacity(const Value& attributes) {
+		for (auto itr = attributes.MemberBegin(); itr != attributes.MemberEnd(); ++itr) {
+			FString fullName = UTF8_TO_TCHAR(itr->name.GetString());
+			int32 idx;
+			if (fullName.FindLastChar(':', idx)) {
+				fullName = fullName.RightChop(idx + 1);
+			}
+			if (fullName.Equals(OPACITY)) {
+				return FormatAttributeValue(itr->value);
+			}
+		}
+		return TEXT("1");
 	}
 
 	FString ProcessAttributes(const Value& attributes, const TArray<FString>& filteredAttrNames, TArray<bool> vectors) {
@@ -161,6 +161,8 @@ namespace IFC {
 
 		for (int32 i = 0; i < filteredAttrNames.Num(); ++i) {
 			const FString& attrName = filteredAttrNames[i];
+			if (SkipProcessingAttribute(attrName))
+				continue;
 			FTCHARToUTF8 utf8AttrName(*attrName);
 			const char* attrNameUtf8 = utf8AttrName.Get();
 
@@ -183,6 +185,12 @@ namespace IFC {
 					if (j > 0) result += TEXT(", ");
 					result += FormatAttributeValue(attrValue[j]);
 				}
+
+				// Append opacity only to diffuseColor
+				if (name.Equals(DIFFUSECOLOR)) {
+					result += TEXT(", ") + GetOpacity(attributes);
+				}
+
 				result += TEXT("}}\n");
 				continue;
 			}
@@ -197,11 +205,9 @@ namespace IFC {
 					first = false;
 					result += FormatAttributeValue(it->value);
 				}
-			}
-			else if (attrValue.IsArray()) {
+			} else if (attrValue.IsArray()) {
 				result += FormatAttributeValue(attrValue);
-			}
-			else {
+			} else {
 				result += FormatAttributeValue(attrValue);
 			}
 

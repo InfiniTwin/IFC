@@ -14,11 +14,6 @@ public:
 };
 
 namespace IFC {
-	IFC_API FString& Scope();
-
-	/// <summary>
-	/// List of allowed attributes
-	/// </summary>
 	static const TSet<FString> AllowedAttributes = {
 		// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
 		TEXT("opacity"),
@@ -51,10 +46,19 @@ namespace IFC {
 		TEXT("xformop"),
 		//TEXT("basiscurves"),
 	};
-	static const TSet<FString> AllowedVectorAttributes = {
+	static const TSet<FString> VectorAttributes = {
 		// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
 		TEXT("diffuseColor"),
 	};
+	static const TSet<FString> SkipProcessingAttributes = {
+		// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
+		TEXT("opacity"),
+	};
+
+	constexpr const char* DIFFUSECOLOR = "DiffuseColor";
+	constexpr const char* OPACITY = "opacity";
+
+	IFC_API FString& Scope();
 
 	IFC_API void Register(flecs::world& world);
 
