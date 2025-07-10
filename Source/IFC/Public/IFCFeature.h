@@ -3,7 +3,6 @@
 #pragma once
 
 #include <flecs.h>
-#include <vector>
 #include "ECS.h"
 #include "ECSCore.h"
 
