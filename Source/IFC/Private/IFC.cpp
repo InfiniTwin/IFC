@@ -10,6 +10,10 @@
 
 #define LOCTEXT_NAMESPACE "FIFCModule"
 
+#include "rapidjson/stringbuffer.h"
+#include "rapidjson/writer.h"
+
+
 void FIFCModule::StartupModule() {
 	// This code will execute after your module is loaded into memory; the exact timing is specified in the .uplugin file per-module
 }
@@ -181,14 +185,8 @@ namespace IFC {
 
 	bool HasAttribute(const TSet<FString>& attributes, const FString& name) {
 		for (const FString& attribute : attributes) {
-			int32 attrLen = name.Len();
-			int32 allowedLen = attribute.Len();
-
-			if (attrLen >= allowedLen) {
-				FString attrSuffix = name.Right(allowedLen);
-				if (attrSuffix == attribute)
-					return true;
-			}
+			if (name == attribute)
+				return true;
 		}
 		return false;
 	}
@@ -206,19 +204,11 @@ namespace IFC {
 	}
 
 	FString FormatAttributeName(const FString& fullName) {
-		FString trimmed;
-		if (fullName.Contains(TEXT("::"))) {
-			int32 idx;
-			fullName.FindLastChar(':', idx);
-			trimmed = fullName.RightChop(idx + 1);
-		} else {
-			trimmed = fullName;
+		FString formatted = fullName;
+		for (const FString& symbol : { TEXT("::"), TEXT("-") }) {
+			formatted = formatted.Replace(*symbol, TEXT("_"));
 		}
-
-		if (trimmed.Len() > 0) {
-			trimmed[0] = FChar::ToUpper(trimmed[0]);
-		}
-		return trimmed;
+		return formatted;
 	}
 
 	FString FormatAttributeValue(const Value& val, bool isInnerArray = false) {
@@ -269,12 +259,8 @@ namespace IFC {
 
 	FString GetOpacity(const Value& attributes) {
 		for (auto itr = attributes.MemberBegin(); itr != attributes.MemberEnd(); ++itr) {
-			FString fullName = UTF8_TO_TCHAR(itr->name.GetString());
-			int32 idx;
-			if (fullName.FindLastChar(':', idx)) {
-				fullName = fullName.RightChop(idx + 1);
-			}
-			if (fullName.Equals(OPACITY)) {
+			FString name = UTF8_TO_TCHAR(itr->name.GetString());
+			if (name.Equals(OPACITY_ATTRIBUTE)) {
 				return FormatAttributeValue(itr->value);
 			}
 		}
@@ -311,8 +297,7 @@ namespace IFC {
 					result += FormatAttributeValue(attrValue[j]);
 				}
 
-				// Append opacity only to diffuseColor
-				if (name.Equals(DIFFUSECOLOR)) {
+				if (name.Equals(DIFFUSECOLOR_COMPONENT)) {
 					result += TEXT(", ") + GetOpacity(attributes);
 				}
 
@@ -341,7 +326,7 @@ namespace IFC {
 
 		return result;
 	}
-	
+
 	FString GetAttributes(const Value& obj) {
 		if (!obj.HasMember("attributes") || !obj["attributes"].IsObject())
 			return TEXT("");
@@ -355,8 +340,8 @@ namespace IFC {
 			bool isVector = IsVectorAttribute(attrName);
 			if (IncludeAttribute(attrName) || isVector) {
 				filteredAttrNames.Add(attrName);
+				vectors.Add(isVector);
 			}
-			vectors.Add(isVector);
 		}
 
 		if (filteredAttrNames.Num() == 0)
@@ -387,29 +372,287 @@ namespace IFC {
 		return TEXT(": ") + FString::Join(inheritIDs, TEXT(", "));
 	}
 
-	FString GetPrefabs(const Value& data) {
-		if (!data.IsArray())
+	FString GetChildren(const Value& obj) {
+		if (!obj.HasMember("children") || !obj["children"].IsObject())
 			return TEXT("");
 
+		const Value& children = obj["children"];
 		FString result;
+
+		for (auto itr = children.MemberBegin(); itr != children.MemberEnd(); ++itr) {
+			const FString key = UTF8_TO_TCHAR(itr->name.GetString());
+			const Value& val = itr->value;
+
+			if (val.IsString()) {
+				const FString valueStr = UTF8_TO_TCHAR(val.GetString());
+				result += FString::Printf(TEXT("    %s: %s {}\n"), *key, *valueStr);
+			}
+		}
+
+		return result;
+	}
+
+	TArray<const Value*> ReorderChildrenLast(const TArray<const Value*>& sorted) {
+		TArray<const Value*> noChildren;
+		TArray<const Value*> withChildren;
+
+		for (const Value* obj : sorted) {
+			if (obj->HasMember("children") && (*obj)["children"].IsObject()) {
+				withChildren.Add(obj);
+			} else {
+				noChildren.Add(obj);
+			}
+		}
+
+		// Children go last
+		noChildren.Append(withChildren);
+		return noChildren;
+	}
+
+	TArray<const rapidjson::Value*> TopologicallySortObjects(const rapidjson::Value& data) {
+		using namespace rapidjson;
+
+		if (!data.IsArray())
+			return {};
+
+		// Step 1: Build objectMap and idToPath
+		TMap<FString, const Value*> objectMap;
+		TMap<FString, FString> idToPath;
+		TArray<const Value*> originalOrder; // Keep original order for fallback
+		TSet<const Value*> sortedSet;
 
 		for (SizeType i = 0; i < data.Size(); ++i) {
 			const Value& obj = data[i];
-			if (!obj.IsObject())
+			originalOrder.Add(&obj);
+
+			if (obj.HasMember("path") && obj["path"].IsString()) {
+				FString path = UTF8_TO_TCHAR(obj["path"].GetString());
+				objectMap.Add(path, &obj);
+
+				// Extract ID portion (e.g. "ID2550...") from path for lookup
+				int32 idIndex = path.Find(TEXT("ID"));
+				if (idIndex != INDEX_NONE) {
+					FString id = path.Mid(idIndex); // includes "ID..."
+					idToPath.Add(id, path);
+				}
+			}
+		}
+
+		// Step 2: Build dependency graph
+		TMap<FString, TArray<FString>> dependencyGraph;
+
+		auto ResolveReference = [&](const FString& ref) -> FString {
+			const FString* found = idToPath.Find(ref);
+			return found ? *found : ref;
+		};
+
+		for (const auto& Pair : objectMap) {
+			FString path = Pair.Key;
+			const Value* obj = Pair.Value;
+
+			TArray<FString> dependencies;
+
+			// Children
+			if (obj->HasMember("children") && (*obj)["children"].IsObject()) {
+				const Value& children = (*obj)["children"];
+				for (auto itr = children.MemberBegin(); itr != children.MemberEnd(); ++itr) {
+					if (itr->value.IsString()) {
+						FString ref = UTF8_TO_TCHAR(itr->value.GetString());
+						FString resolved = ResolveReference(ref);
+						dependencies.Add(resolved);
+					}
+				}
+			}
+
+			// Inherits
+			if (obj->HasMember("inherits")) {
+				const Value& inherits = (*obj)["inherits"];
+				if (inherits.IsObject()) {
+					for (auto itr = inherits.MemberBegin(); itr != inherits.MemberEnd(); ++itr) {
+						if (itr->value.IsString()) {
+							FString ref = UTF8_TO_TCHAR(itr->value.GetString());
+							FString resolved = ResolveReference(ref);
+							dependencies.Add(resolved);
+						}
+					}
+				} else if (inherits.IsArray()) {
+					for (SizeType i = 0; i < inherits.Size(); ++i) {
+						if (inherits[i].IsString()) {
+							FString ref = UTF8_TO_TCHAR(inherits[i].GetString());
+							FString resolved = ResolveReference(ref);
+							dependencies.Add(resolved);
+						}
+					}
+				}
+			}
+
+			UE_LOG(LogTemp, Log, TEXT("Object %s depends on:"), *path);
+			for (const FString& dep : dependencies) {
+				UE_LOG(LogTemp, Log, TEXT("   -> %s"), *dep);
+			}
+
+			dependencyGraph.Add(path, dependencies);
+		}
+
+		// Step 3: Topological sort (DFS)
+		TSet<FString> visited;
+		TSet<FString> tempMarks;
+		TArray<FString> sortedPaths;
+
+		TFunction<void(const FString&)> Visit = [&](const FString& node) {
+			if (visited.Contains(node))
+				return;
+			if (tempMarks.Contains(node)) {
+				UE_LOG(LogTemp, Warning, TEXT("Cyclic dependency detected at %s"), *node);
+				return;
+			}
+
+			tempMarks.Add(node);
+			for (const FString& dep : dependencyGraph.FindRef(node)) {
+				if (objectMap.Contains(dep))
+					Visit(dep);
+			}
+			tempMarks.Remove(node);
+			visited.Add(node);
+			sortedPaths.Add(node);
+		};
+
+		for (const auto& Pair : objectMap) {
+			Visit(Pair.Key);
+		}
+
+		// Step 4: Construct result
+		TArray<const Value*> result;
+
+		for (const FString& path : sortedPaths) {
+			const Value* obj = objectMap.FindRef(path);
+			if (obj) {
+				result.Add(obj);
+				sortedSet.Add(obj);
+			}
+		}
+
+		// Add remaining objects that were not sorted (orphans)
+		for (const Value* obj : originalOrder) {
+			if (!sortedSet.Contains(obj)) {
+				result.Add(obj);
+			}
+		}
+
+		// Optional: move parents before children (if needed for output)
+		return ReorderChildrenLast(result);
+	}
+
+	Value MergePrefabs(const Value& inputArray, Document::AllocatorType& allocator) {
+		Value mergedArray(kArrayType);
+		TMap<FString, Value> mergedObjects;
+
+		for (SizeType i = 0; i < inputArray.Size(); ++i) {
+			const Value& obj = inputArray[i];
+			if (!obj.IsObject() || !obj.HasMember("path") || !obj["path"].IsString())
 				continue;
 
-			FString attributesBlock = GetAttributes(obj);
-			FString inheritsBlock = GetInheritances(obj);
+			FString pathStr = UTF8_TO_TCHAR(obj["path"].GetString());
 
-			if (attributesBlock.IsEmpty() && inheritsBlock.IsEmpty())
+			// If this path hasn't been seen, just copy it into the map
+			if (!mergedObjects.Contains(pathStr)) {
+				Value newObj(kObjectType);
+				newObj.CopyFrom(obj, allocator);
+				mergedObjects.Add(pathStr, MoveTemp(newObj));
+			} else {
+				Value& existing = mergedObjects[pathStr];
+
+				// Merge "attributes"
+				if (obj.HasMember("attributes") && obj["attributes"].IsObject()) {
+					Value& existingAttrs = existing.HasMember("attributes")
+						? existing["attributes"]
+						: existing.AddMember("attributes", Value(kObjectType), allocator)["attributes"];
+
+					const Value& newAttrs = obj["attributes"];
+					for (auto it = newAttrs.MemberBegin(); it != newAttrs.MemberEnd(); ++it) {
+						// Overwrite or insert attribute
+						Value key(it->name, allocator);
+						Value val(it->value, allocator);
+						existingAttrs.RemoveMember(key); // avoid duplicate keys
+						existingAttrs.AddMember(key, val, allocator);
+					}
+				}
+
+				// Merge "inherits"
+				if (obj.HasMember("inherits") && obj["inherits"].IsArray()) {
+					Value& existingInherits = existing.HasMember("inherits")
+						? existing["inherits"]
+						: existing.AddMember("inherits", Value(kArrayType), allocator)["inherits"];
+
+					const Value& newInherits = obj["inherits"];
+					for (SizeType j = 0; j < newInherits.Size(); ++j) {
+						const Value& inheritVal = newInherits[j];
+
+						// Prevent duplicates
+						bool alreadyExists = false;
+						for (SizeType k = 0; k < existingInherits.Size(); ++k) {
+							if (existingInherits[k] == inheritVal) {
+								alreadyExists = true;
+								break;
+							}
+						}
+						if (!alreadyExists) {
+							Value copyVal(inheritVal, allocator);
+							existingInherits.PushBack(copyVal, allocator);
+						}
+					}
+				}
+			}
+		}
+
+		for (const auto& Pair : mergedObjects) {
+			Value copy(Pair.Value, allocator);
+			mergedArray.PushBack(copy, allocator);
+		}
+
+		return mergedArray;
+	}
+
+	FString GetPrefabs(rapidjson::Document& doc) {
+		if (!doc.HasMember("data") || !doc["data"].IsArray()) {
+			return TEXT("");
+		}
+
+		auto& data = doc["data"];
+		auto& allocator = doc.GetAllocator();
+
+		rapidjson::Value merged = MergePrefabs(data, allocator);
+
+		// Convert merged (rapidjson::Value) into a stringified JSON (UTF-8)
+		rapidjson::StringBuffer buffer;
+		rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+		merged.Accept(writer);
+
+		// Convert to FString and log
+		FString mergedJsonString = UTF8_TO_TCHAR(buffer.GetString());
+		UE_LOG(LogTemp, Log, TEXT("Merged Prefabs JSON:\n%s"), *mergedJsonString);
+
+		TArray<const rapidjson::Value*> sortedObjects = TopologicallySortObjects(merged);
+		FString result;
+
+		for (const rapidjson::Value* obj : sortedObjects) {
+			if (!obj || !obj->IsObject())
 				continue;
 
-			FString path = obj.HasMember("path") && obj["path"].IsString()
-				? UTF8_TO_TCHAR(obj["path"].GetString())
+			FString path = obj->HasMember("path") && (*obj)["path"].IsString()
+				? UTF8_TO_TCHAR((*obj)["path"].GetString())
 				: TEXT("");
+
+			FString inheritsBlock = GetInheritances(*obj);
+			FString attributesBlock = GetAttributes(*obj);
+			FString childrenBlock = GetChildren(*obj);
+
+			if (inheritsBlock.IsEmpty() && attributesBlock.IsEmpty() && childrenBlock.IsEmpty())
+				continue;
 
 			result += FString::Printf(TEXT("prefab [IFC].%s%s {\n"), *path, *inheritsBlock);
 			result += attributesBlock;
+			result += childrenBlock;
 			result += TEXT("}\n");
 		}
 
@@ -421,7 +664,6 @@ namespace IFC {
 		auto formated = FormatUUIDs(jsonString);
 		free(jsonString);
 
-		using namespace rapidjson;
 		Document doc;
 
 		if (doc.Parse(TCHAR_TO_UTF8(*formated)).HasParseError()) {
@@ -429,18 +671,8 @@ namespace IFC {
 			return;
 		}
 
-		if (!doc.HasMember("data") || !doc["data"].IsArray()) {
-			UE_LOG(LogTemp, Error, TEXT("Missing or invalid 'data' array"));
-			return;
-		}
-
-		const auto& data = doc["data"];
-
-		FString prefabs = GetPrefabs(data);
+		FString prefabs = GetPrefabs(doc);
 		UE_LOG(LogTemp, Log, TEXT(">>> Prefabs:\n%s"), *prefabs);
-
-		FString hierarchies = GetHierarchies(data);
-		UE_LOG(LogTemp, Log, TEXT(">>> Hierarchies:\n%s"), *hierarchies);
 
 		ECS::RunScript(world, path, prefabs);
 	}
