@@ -14,6 +14,7 @@ namespace IFC {
 	// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
 	struct bsi_ifc_presentation_diffuseColor { FLinearColor Value; };
 	struct bsi_ifc_class { FString Code, Uri; };
+	struct bsi_ifc_spaceBoundary {};
 	struct bsi_ifc_material { FString Code, Uri; };
 
 	// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/prop@v5a.ifcx
@@ -36,7 +37,8 @@ namespace IFC {
 	};
 	struct usd_usdgeom_visibility { FString Value; };
 	using namespace ECS;
-	struct usd_xformop { TArray<Vector4> Transform; };
+	struct usd_xformop { TArray<FVector4f> Transform; };
+	struct usd_usdgeom_basiscurves { TArray<FVector3f> Points; };
 
 	// "https://ifcx.dev/@nlsfb/nlsfb@v1.ifcx"
 	struct nlsfb_class { FString Code, Uri; };

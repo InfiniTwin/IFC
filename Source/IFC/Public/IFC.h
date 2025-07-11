@@ -56,6 +56,8 @@ namespace IFC {
 		TEXT("bsi::ifc::presentation::diffuseColor"),
 	};
 	static const TSet<FString> SkipProcessingAttributes = {
+		TEXT("customdata"),
+
 		// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
 		TEXT("bsi::ifc::presentation::opacity"),
 	};

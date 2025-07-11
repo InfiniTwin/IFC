@@ -11,6 +11,7 @@ namespace IFC {
 			.member<FString>(MEMBER(bsi_ifc_class::Code))
 			.member<FString>(MEMBER(bsi_ifc_class::Uri))
 			.add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<bsi_ifc_spaceBoundary>().add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<bsi_ifc_material>()
 			.member<FString>(MEMBER(bsi_ifc_material::Code))
 			.member<FString>(MEMBER(bsi_ifc_material::Uri))
@@ -41,9 +42,8 @@ namespace IFC {
 		world.component<usd_usdgeom_visibility>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 
 		using namespace ECS;
-		world.component<usd_xformop>()
-			.member<TArray<Vector4>>("Transform")
-			.add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<usd_xformop>().member<TArray<FVector4f>>(MEMBER(usd_xformop::Transform)).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<usd_usdgeom_basiscurves>().member<TArray<FVector3f>>(MEMBER(usd_usdgeom_basiscurves::Points)).add(flecs::OnInstantiate, flecs::Inherit);
 	
 		world.component<nlsfb_class>()
 			.member<FString>(MEMBER(nlsfb_class::Code))
