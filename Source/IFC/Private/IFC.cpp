@@ -53,135 +53,6 @@ namespace IFC {
 
 	using namespace rapidjson;
 
-#pragma region Hierarchies
-
-	FString BuildHierarchyTree(const rapidjson::Value* node, const TMap<FString, const rapidjson::Value*>& pathToObjectMap, int32 depth) {
-		if (!node || !node->HasMember(PATH) || !(*node)[PATH].IsString())
-			return TEXT("");
-
-		auto indent = TEXT('\t');
-		FString nodeIndent = FString::ChrN(depth, indent);
-		FString innerIndent = FString::ChrN(depth + 1, indent);
-
-		FString path = UTF8_TO_TCHAR((*node)[PATH].GetString());
-
-		FString output;
-		if (depth == 0) // Root node: use path as header			
-			output += FString::Printf(TEXT("%s%s {\n"), *nodeIndent, *path);
-		else // Child node: name is printed by parent, just open block
-			output += FString::Printf(TEXT(": %s {\n"), *path);
-
-		if (node->HasMember(CHILDREN) && (*node)[CHILDREN].IsObject()) {
-			const auto& children = (*node)[CHILDREN];
-			for (auto itr = children.MemberBegin(); itr != children.MemberEnd(); ++itr) {
-				if (!itr->value.IsString()) continue;
-
-				FString childName = UTF8_TO_TCHAR(itr->name.GetString());
-				FString childPath = UTF8_TO_TCHAR(itr->value.GetString());
-
-				const rapidjson::Value* const* childObjPtr = pathToObjectMap.Find(childPath);
-				output += FString::Printf(TEXT("%s%s"), *innerIndent, *childName);
-
-				if (childObjPtr && *childObjPtr)
-					output += BuildHierarchyTree(*childObjPtr, pathToObjectMap, depth + 1);
-				else // Leaf
-					output += FString::Printf(TEXT(": %s {}\n"), *childPath);
-			}
-		}
-
-		output += FString::Printf(TEXT("%s}\n"), *nodeIndent);
-		return output;
-	}
-
-	FString GetHierarchies(const rapidjson::Value& data) {
-		TArray<const Value*> hierarchyObjects;
-		TArray<const Value*> rootObjects;
-		TArray<const Value*> childObjects;
-		TSet<FString> allChildPaths;
-		TMap<FString, int32> pathCounts;
-
-		// Step 1: Find all objects with CHILDREN and collect child paths
-		for (SizeType i = 0; i < data.Size(); ++i) {
-			const Value& item = data[i];
-
-			if (item.HasMember(PATH) && item[PATH].IsString()) {
-				FString path = UTF8_TO_TCHAR(item[PATH].GetString());
-				pathCounts.FindOrAdd(path)++;
-			}
-
-			if (item.HasMember(CHILDREN) && item[CHILDREN].IsObject()) {
-				hierarchyObjects.Add(&item);
-
-				const Value& children = item[CHILDREN];
-				for (auto itr = children.MemberBegin(); itr != children.MemberEnd(); ++itr) {
-					if (itr->value.IsString()) {
-						FString childPath = UTF8_TO_TCHAR(itr->value.GetString());
-						allChildPaths.Add(childPath);
-					}
-				}
-			}
-		}
-
-		// Step 2: Filter root objects (whose path doesn't appear in any child map)
-		for (const Value* item : hierarchyObjects) {
-			if (item->HasMember(PATH) && (*item)[PATH].IsString()) {
-				FString path = UTF8_TO_TCHAR((*item)[PATH].GetString());
-
-				if (!allChildPaths.Contains(path)) {
-					rootObjects.Add(item);
-				}
-			}
-		}
-
-		// Step 3: Child objects = hierarchyObjects - rootObjects
-		for (const Value* item : hierarchyObjects) {
-			if (!rootObjects.Contains(item)) {
-				childObjects.Add(item);
-			}
-		}
-
-		// Step 4: Map all hierarchy objects
-		TMap<FString, const Value*> pathToObjectMap;
-		for (const Value* obj : hierarchyObjects) {
-			if (obj->HasMember(PATH) && (*obj)[PATH].IsString()) {
-				FString path = UTF8_TO_TCHAR((*obj)[PATH].GetString());
-				pathToObjectMap.Add(path, obj);
-			}
-		}
-
-		// Step 5: Find the main root (its path appears only once in the entire data)
-		const Value* mainRoot = nullptr;
-		for (const Value* root : rootObjects) {
-			if (root->HasMember(PATH) && (*root)[PATH].IsString()) {
-				FString path = UTF8_TO_TCHAR((*root)[PATH].GetString());
-				if (pathCounts.Contains(path) && pathCounts[path] == 1) {
-					mainRoot = root;
-					break;
-				}
-			}
-		}
-
-		// Step 6: Output all rootObjects, mainRoot last, prefixed with "prefab " if not mainRoot
-		FString result;
-		for (const Value* root : rootObjects) {
-			if (root == mainRoot) {
-				continue; // Skip for now, append last
-			}
-			result += FString::Printf(TEXT("\nprefab %s.%s"),
-				*IFC::Scope(),
-				*BuildHierarchyTree(root, pathToObjectMap, 0));
-		}
-		if (mainRoot) {
-			result += FString::Printf(TEXT("\n%s.%s"),
-				*IFC::Scope(),
-				*BuildHierarchyTree(mainRoot, pathToObjectMap, 0));
-		}
-
-		return result;
-	}
-
-#pragma endregion
-
 #pragma region Attributes
 
 	bool HasAttribute(const TSet<FString>& attributes, const FString& name) {
@@ -469,8 +340,27 @@ namespace IFC {
 
 		return sortedObjects;
 	}
+	
+	void MergeObjectMembers(Value& target, const Value& source, const char* memberName, Document::AllocatorType& allocator) {
+		if (!source.HasMember(memberName) || !source[memberName].IsObject())
+			return;
 
-	Value MergePrefabs(const Value& inputArray, Document::AllocatorType& allocator) {
+		if (!target.HasMember(memberName)) {
+			target.AddMember(Value(memberName, allocator), Value(kObjectType), allocator);
+		}
+
+		Value& targetObject = target[memberName];
+		const Value& sourceObject = source[memberName];
+
+		for (auto itr = sourceObject.MemberBegin(); itr != sourceObject.MemberEnd(); ++itr) {
+			Value key(itr->name, allocator);
+			Value val(itr->value, allocator);
+			targetObject.RemoveMember(key);
+			targetObject.AddMember(key, val, allocator);
+		}
+	}
+
+	Value Merge(const Value& inputArray, Document::AllocatorType& allocator) {
 		Value mergedArray(kArrayType);
 		TMap<FString, Value> mergedObjects;
 
@@ -481,7 +371,6 @@ namespace IFC {
 
 			FString pathStr = UTF8_TO_TCHAR(obj[PATH].GetString());
 
-			// If this path hasn't been seen, just copy it into the map
 			if (!mergedObjects.Contains(pathStr)) {
 				Value newObj(kObjectType);
 				newObj.CopyFrom(obj, allocator);
@@ -489,49 +378,8 @@ namespace IFC {
 			}
 			else {
 				Value& existing = mergedObjects[pathStr];
-
-				// Merge ATTRIBUTES
-				if (obj.HasMember(ATTRIBUTES) && obj[ATTRIBUTES].IsObject()) {
-					if (!existing.HasMember(ATTRIBUTES)) {
-						existing.AddMember(Value(ATTRIBUTES, allocator), Value(kArrayType), allocator);
-					}
-					Value& existingAttrs = existing[ATTRIBUTES];
-
-					const Value& newAttrs = obj[ATTRIBUTES];
-					for (auto it = newAttrs.MemberBegin(); it != newAttrs.MemberEnd(); ++it) {
-						// Overwrite or insert attribute
-						Value key(it->name, allocator);
-						Value val(it->value, allocator);
-						existingAttrs.RemoveMember(key); // avoid duplicate keys
-						existingAttrs.AddMember(key, val, allocator);
-					}
-				}
-
-				// Merge INHERITS
-				if (obj.HasMember(INHERITS) && obj[INHERITS].IsArray()) {
-					if (!existing.HasMember(INHERITS)) {
-						existing.AddMember(Value(INHERITS, allocator), Value(kArrayType), allocator);
-					}
-					Value& existingInherits = existing[INHERITS];
-
-					const Value& newInherits = obj[INHERITS];
-					for (SizeType j = 0; j < newInherits.Size(); ++j) {
-						const Value& inheritVal = newInherits[j];
-
-						// Prevent duplicates
-						bool alreadyExists = false;
-						for (SizeType k = 0; k < existingInherits.Size(); ++k) {
-							if (existingInherits[k] == inheritVal) {
-								alreadyExists = true;
-								break;
-							}
-						}
-						if (!alreadyExists) {
-							Value copyVal(inheritVal, allocator);
-							existingInherits.PushBack(copyVal, allocator);
-						}
-					}
-				}
+				MergeObjectMembers(existing, obj, ATTRIBUTES, allocator);
+				MergeObjectMembers(existing, obj, INHERITS, allocator);
 			}
 		}
 
@@ -551,19 +399,45 @@ namespace IFC {
 		auto& data = doc[DATA];
 		auto& allocator = doc.GetAllocator();
 
-		rapidjson::Value merged = MergePrefabs(data, allocator);
-		TArray<const rapidjson::Value*> sortedObjects = Sort(merged);
+		rapidjson::Value merged = Merge(data, allocator);
+		TArray<const rapidjson::Value*> sorted = Sort(merged);
 		FString result;
 
-		for (const rapidjson::Value* obj : sortedObjects) {
-			if (!obj || !obj->IsObject())
-				continue;
+		TSet<FString> entities;
 
-			FString path = obj->HasMember(PATH) && (*obj)[PATH].IsString()
-				? UTF8_TO_TCHAR((*obj)[PATH].GetString())
-				: TEXT("");
+		// Step 1: Add all paths as candidates
+		for (const rapidjson::Value* obj : sorted) {
+			if (!obj || !obj->IsObject()) continue;
+			entities.Add(UTF8_TO_TCHAR((*obj)[PATH].GetString()));
+		}
 
-			result += FString::Printf(TEXT("prefab %s.%s%s {\n%s%s}\n"),
+		// Step 2: Remove any path that is referenced by others
+		for (const rapidjson::Value* obj : sorted) {
+			if (!obj || !obj->IsObject()) continue;
+
+			// Remove children
+			if ((*obj).HasMember(CHILDREN) && (*obj)[CHILDREN].IsObject()) {
+				for (auto& child : (*obj)[CHILDREN].GetObject()) {
+					entities.Remove(UTF8_TO_TCHAR(child.value.GetString()));
+				}
+			}
+
+			// Remove inherits
+			if ((*obj).HasMember(INHERITS) && (*obj)[INHERITS].IsObject()) {
+				for (auto& inherit : (*obj)[INHERITS].GetObject()) {
+					entities.Remove(UTF8_TO_TCHAR(inherit.value.GetString()));
+				}
+			}
+		}
+
+		for (const rapidjson::Value* obj : sorted) {
+			if (!obj || !obj->IsObject()) continue;
+
+			FString path = UTF8_TO_TCHAR((*obj)[PATH].GetString());
+			bool isPrefab = !entities.Contains(path);
+
+			result += FString::Printf(TEXT("%s%s.%s%s {\n%s%s}\n"),
+				isPrefab ? TEXT("prefab ") : TEXT(""),
 				*IFC::Scope(),
 				*path,
 				*GetInheritances(*obj),
