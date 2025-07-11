@@ -396,8 +396,9 @@ namespace IFC {
 			}
 			else {
 				Value& existing = mergedObjects[pathStr];
-				MergeObjectMembers(existing, obj, ATTRIBUTES, allocator);
 				MergeObjectMembers(existing, obj, INHERITS, allocator);
+				MergeObjectMembers(existing, obj, ATTRIBUTES, allocator);
+				MergeObjectMembers(existing, obj, CHILDREN, allocator);
 			}
 		}
 
@@ -418,26 +419,19 @@ namespace IFC {
 		TArray<const rapidjson::Value*> sorted = Sort(merged);
 		FString result;
 
+		// Find entities: non repeating ID
 		TSet<FString> entities;
-
-		// Step 1: Add all paths as candidates
 		for (const rapidjson::Value* obj : sorted) {
 			if (!obj || !obj->IsObject()) continue;
 			entities.Add(UTF8_TO_TCHAR((*obj)[PATH].GetString()));
 		}
-
-		// Step 2: Remove any path that is referenced by others
 		for (const rapidjson::Value* obj : sorted) {
 			if (!obj || !obj->IsObject()) continue;
-
-			// Remove children
 			if ((*obj).HasMember(CHILDREN) && (*obj)[CHILDREN].IsObject()) {
 				for (auto& child : (*obj)[CHILDREN].GetObject()) {
 					entities.Remove(UTF8_TO_TCHAR(child.value.GetString()));
 				}
 			}
-
-			// Remove inherits
 			if ((*obj).HasMember(INHERITS) && (*obj)[INHERITS].IsObject()) {
 				for (auto& inherit : (*obj)[INHERITS].GetObject()) {
 					entities.Remove(UTF8_TO_TCHAR(inherit.value.GetString()));
