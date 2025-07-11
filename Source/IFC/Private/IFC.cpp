@@ -56,14 +56,14 @@ namespace IFC {
 #pragma region Hierarchies
 
 	FString BuildHierarchyTree(const rapidjson::Value* node, const TMap<FString, const rapidjson::Value*>& pathToObjectMap, int32 depth) {
-		if (!node || !node->HasMember("path") || !(*node)["path"].IsString())
+		if (!node || !node->HasMember(PATH) || !(*node)[PATH].IsString())
 			return TEXT("");
 
 		auto indent = TEXT('\t');
 		FString nodeIndent = FString::ChrN(depth, indent);
 		FString innerIndent = FString::ChrN(depth + 1, indent);
 
-		FString path = UTF8_TO_TCHAR((*node)["path"].GetString());
+		FString path = UTF8_TO_TCHAR((*node)[PATH].GetString());
 
 		FString output;
 		if (depth == 0) // Root node: use path as header			
@@ -71,8 +71,8 @@ namespace IFC {
 		else // Child node: name is printed by parent, just open block
 			output += FString::Printf(TEXT(": %s {\n"), *path);
 
-		if (node->HasMember("children") && (*node)["children"].IsObject()) {
-			const auto& children = (*node)["children"];
+		if (node->HasMember(CHILDREN) && (*node)[CHILDREN].IsObject()) {
+			const auto& children = (*node)[CHILDREN];
 			for (auto itr = children.MemberBegin(); itr != children.MemberEnd(); ++itr) {
 				if (!itr->value.IsString()) continue;
 
@@ -100,19 +100,19 @@ namespace IFC {
 		TSet<FString> allChildPaths;
 		TMap<FString, int32> pathCounts;
 
-		// Step 1: Find all objects with "children" and collect child paths
+		// Step 1: Find all objects with CHILDREN and collect child paths
 		for (SizeType i = 0; i < data.Size(); ++i) {
 			const Value& item = data[i];
 
-			if (item.HasMember("path") && item["path"].IsString()) {
-				FString path = UTF8_TO_TCHAR(item["path"].GetString());
+			if (item.HasMember(PATH) && item[PATH].IsString()) {
+				FString path = UTF8_TO_TCHAR(item[PATH].GetString());
 				pathCounts.FindOrAdd(path)++;
 			}
 
-			if (item.HasMember("children") && item["children"].IsObject()) {
+			if (item.HasMember(CHILDREN) && item[CHILDREN].IsObject()) {
 				hierarchyObjects.Add(&item);
 
-				const Value& children = item["children"];
+				const Value& children = item[CHILDREN];
 				for (auto itr = children.MemberBegin(); itr != children.MemberEnd(); ++itr) {
 					if (itr->value.IsString()) {
 						FString childPath = UTF8_TO_TCHAR(itr->value.GetString());
@@ -124,8 +124,8 @@ namespace IFC {
 
 		// Step 2: Filter root objects (whose path doesn't appear in any child map)
 		for (const Value* item : hierarchyObjects) {
-			if (item->HasMember("path") && (*item)["path"].IsString()) {
-				FString path = UTF8_TO_TCHAR((*item)["path"].GetString());
+			if (item->HasMember(PATH) && (*item)[PATH].IsString()) {
+				FString path = UTF8_TO_TCHAR((*item)[PATH].GetString());
 
 				if (!allChildPaths.Contains(path)) {
 					rootObjects.Add(item);
@@ -143,8 +143,8 @@ namespace IFC {
 		// Step 4: Map all hierarchy objects
 		TMap<FString, const Value*> pathToObjectMap;
 		for (const Value* obj : hierarchyObjects) {
-			if (obj->HasMember("path") && (*obj)["path"].IsString()) {
-				FString path = UTF8_TO_TCHAR((*obj)["path"].GetString());
+			if (obj->HasMember(PATH) && (*obj)[PATH].IsString()) {
+				FString path = UTF8_TO_TCHAR((*obj)[PATH].GetString());
 				pathToObjectMap.Add(path, obj);
 			}
 		}
@@ -152,8 +152,8 @@ namespace IFC {
 		// Step 5: Find the main root (its path appears only once in the entire data)
 		const Value* mainRoot = nullptr;
 		for (const Value* root : rootObjects) {
-			if (root->HasMember("path") && (*root)["path"].IsString()) {
-				FString path = UTF8_TO_TCHAR((*root)["path"].GetString());
+			if (root->HasMember(PATH) && (*root)[PATH].IsString()) {
+				FString path = UTF8_TO_TCHAR((*root)[PATH].GetString());
 				if (pathCounts.Contains(path) && pathCounts[path] == 1) {
 					mainRoot = root;
 					break;
@@ -167,10 +167,14 @@ namespace IFC {
 			if (root == mainRoot) {
 				continue; // Skip for now, append last
 			}
-			result += TEXT("\nprefab [IFC].") + BuildHierarchyTree(root, pathToObjectMap, 0);
+			result += FString::Printf(TEXT("\nprefab %s.%s"),
+				*IFC::Scope(),
+				*BuildHierarchyTree(root, pathToObjectMap, 0));
 		}
 		if (mainRoot) {
-			result += TEXT("\n[IFC].") + BuildHierarchyTree(mainRoot, pathToObjectMap, 0);
+			result += FString::Printf(TEXT("\n%s.%s"),
+				*IFC::Scope(),
+				*BuildHierarchyTree(mainRoot, pathToObjectMap, 0));
 		}
 
 		return result;
@@ -188,12 +192,12 @@ namespace IFC {
 		return false;
 	}
 
-	bool IncludeAttribute(const FString& attribute) {
-		return HasAttribute(AllowedAttributes, attribute);
+	bool CanIncludeAttributeValues(const FString& attribute) {
+		return !HasAttribute(ExcludeAtributesValues, attribute);
 	}
 
-	bool SkipProcessingAttribute(const FString& attribute) {
-		return HasAttribute(SkipProcessingAttributes, attribute);
+	bool ExcludeAttribute(const FString& attribute) {
+		return HasAttribute(ExcludeAttributes, attribute);
 	}
 
 	bool IsVectorAttribute(const FString& attribute) {
@@ -273,15 +277,13 @@ namespace IFC {
 		return TEXT("1");
 	}
 
-	FString ProcessAttributes(const Value& attributes, const TArray<FString>& attrNames, const TArray<bool>& isVectors, const TArray<bool>& isFiltered) {
+	FString ProcessAttributes(const Value& attributes, const TArray<FString>& attrNames, const TArray<bool>& isVectors, const TArray<bool>& includeAttributesValues) {
 		FString result;
 
 		for (int32 i = 0; i < attrNames.Num(); ++i) {
-			const FString& attrName = attrNames[i];			
-			if (SkipProcessingAttribute(attrName))
-				continue; 
-			const bool isVector = isVectors[i];
-			const bool filtered = isFiltered[i];
+			const FString& attrName = attrNames[i];
+			if (ExcludeAttribute(attrName))
+				continue;
 
 			FTCHARToUTF8 utf8AttrName(*attrName);
 			const char* attrNameUtf8 = utf8AttrName.Get();
@@ -293,8 +295,7 @@ namespace IFC {
 			const Value& attrValue = memberItr->value;
 			FString name = FormatAttributeName(attrName);
 
-			// Not filtered? Just print name
-			if (!filtered) {
+			if (!includeAttributesValues[i]) {
 				result += FString::Printf(TEXT("\t%s\n"), *name);
 				continue;
 			}
@@ -306,7 +307,7 @@ namespace IFC {
 			}
 
 			// Vector attribute
-			if (attrValue.IsArray() && isVector) {
+			if (attrValue.IsArray() && isVectors[i]) {
 				result += FString::Printf(TEXT("\t%s: {{"), *name);
 				for (SizeType j = 0; j < attrValue.Size(); ++j) {
 					if (j > 0) result += TEXT(", ");
@@ -341,34 +342,34 @@ namespace IFC {
 	}
 
 	FString GetAttributes(const Value& obj) {
-		if (!obj.HasMember("attributes") || !obj["attributes"].IsObject())
+		if (!obj.HasMember(ATTRIBUTES) || !obj[ATTRIBUTES].IsObject())
 			return TEXT("");
 
-		const Value& attributes = obj["attributes"];
+		const Value& attributes = obj[ATTRIBUTES];
 		TArray<FString> attrNames;
 		TArray<bool> isVectorFlags;
-		TArray<bool> isFilteredFlags;
+		TArray<bool> includeAttributesValues;
 
 		for (auto itr = attributes.MemberBegin(); itr != attributes.MemberEnd(); ++itr) {
 			FString attrName = UTF8_TO_TCHAR(itr->name.GetString());
 			bool isVector = IsVectorAttribute(attrName);
-			bool isFiltered = IncludeAttribute(attrName) || isVector;
+			bool includeAttributeValues = CanIncludeAttributeValues(attrName) || isVector;
 
 			attrNames.Add(attrName);
 			isVectorFlags.Add(isVector);
-			isFilteredFlags.Add(isFiltered);
+			includeAttributesValues.Add(includeAttributeValues);
 		}
 
-		return ProcessAttributes(attributes, attrNames, isVectorFlags, isFilteredFlags);
+		return ProcessAttributes(attributes, attrNames, isVectorFlags, includeAttributesValues);
 	}
 
 #pragma endregion
 
 	FString GetInheritances(const Value& obj) {
-		if (!obj.HasMember("inherits") || !obj["inherits"].IsObject())
+		if (!obj.HasMember(INHERITS) || !obj[INHERITS].IsObject())
 			return TEXT("");
 
-		const Value& inherits = obj["inherits"];
+		const Value& inherits = obj[INHERITS];
 		TArray<FString> inheritIDs;
 
 		for (auto itr = inherits.MemberBegin(); itr != inherits.MemberEnd(); ++itr) {
@@ -385,10 +386,10 @@ namespace IFC {
 	}
 
 	FString GetChildren(const Value& obj) {
-		if (!obj.HasMember("children") || !obj["children"].IsObject())
+		if (!obj.HasMember(CHILDREN) || !obj[CHILDREN].IsObject())
 			return TEXT("");
 
-		const Value& children = obj["children"];
+		const Value& children = obj[CHILDREN];
 		FString result;
 
 		for (auto itr = children.MemberBegin(); itr != children.MemberEnd(); ++itr) {
@@ -410,24 +411,24 @@ namespace IFC {
 
 		// Step 1: Build object map and empty dependency list
 		for (auto& entry : dataArray.GetArray()) {
-			if (!entry.HasMember("path") || !entry["path"].IsString()) {
+			if (!entry.HasMember(PATH) || !entry[PATH].IsString()) {
 				continue;
 			}
-			FString id = UTF8_TO_TCHAR(entry["path"].GetString());
+			FString id = UTF8_TO_TCHAR(entry[PATH].GetString());
 			objectMap.Add(id, &entry);
 			dependencies.Add(id, {});
 		}
 
 		// Step 2: Fill in dependencies
 		for (auto& entry : dataArray.GetArray()) {
-			if (!entry.HasMember("path") || !entry["path"].IsString()) {
+			if (!entry.HasMember(PATH) || !entry[PATH].IsString()) {
 				continue;
 			}
 
-			FString id = UTF8_TO_TCHAR(entry["path"].GetString());
+			FString id = UTF8_TO_TCHAR(entry[PATH].GetString());
 
-			if (entry.HasMember("children") && entry["children"].IsObject()) {
-				for (auto& child : entry["children"].GetObject()) {
+			if (entry.HasMember(CHILDREN) && entry[CHILDREN].IsObject()) {
+				for (auto& child : entry[CHILDREN].GetObject()) {
 					FString childId = UTF8_TO_TCHAR(child.value.GetString());
 					if (dependencies.Contains(id)) {
 						dependencies[id].Add(childId); // id depends on child
@@ -435,8 +436,8 @@ namespace IFC {
 				}
 			}
 
-			if (entry.HasMember("inherits") && entry["inherits"].IsObject()) {
-				for (auto& inherit : entry["inherits"].GetObject()) {
+			if (entry.HasMember(INHERITS) && entry[INHERITS].IsObject()) {
+				for (auto& inherit : entry[INHERITS].GetObject()) {
 					FString baseId = UTF8_TO_TCHAR(inherit.value.GetString());
 					if (dependencies.Contains(id)) {
 						dependencies[id].Add(baseId); // id depends on base
@@ -475,10 +476,10 @@ namespace IFC {
 
 		for (SizeType i = 0; i < inputArray.Size(); ++i) {
 			const Value& obj = inputArray[i];
-			if (!obj.IsObject() || !obj.HasMember("path") || !obj["path"].IsString())
+			if (!obj.IsObject() || !obj.HasMember(PATH) || !obj[PATH].IsString())
 				continue;
 
-			FString pathStr = UTF8_TO_TCHAR(obj["path"].GetString());
+			FString pathStr = UTF8_TO_TCHAR(obj[PATH].GetString());
 
 			// If this path hasn't been seen, just copy it into the map
 			if (!mergedObjects.Contains(pathStr)) {
@@ -489,13 +490,14 @@ namespace IFC {
 			else {
 				Value& existing = mergedObjects[pathStr];
 
-				// Merge "attributes"
-				if (obj.HasMember("attributes") && obj["attributes"].IsObject()) {
-					Value& existingAttrs = existing.HasMember("attributes")
-						? existing["attributes"]
-						: existing.AddMember("attributes", Value(kObjectType), allocator)["attributes"];
+				// Merge ATTRIBUTES
+				if (obj.HasMember(ATTRIBUTES) && obj[ATTRIBUTES].IsObject()) {
+					if (!existing.HasMember(ATTRIBUTES)) {
+						existing.AddMember(Value(ATTRIBUTES, allocator), Value(kArrayType), allocator);
+					}
+					Value& existingAttrs = existing[ATTRIBUTES];
 
-					const Value& newAttrs = obj["attributes"];
+					const Value& newAttrs = obj[ATTRIBUTES];
 					for (auto it = newAttrs.MemberBegin(); it != newAttrs.MemberEnd(); ++it) {
 						// Overwrite or insert attribute
 						Value key(it->name, allocator);
@@ -505,13 +507,14 @@ namespace IFC {
 					}
 				}
 
-				// Merge "inherits"
-				if (obj.HasMember("inherits") && obj["inherits"].IsArray()) {
-					Value& existingInherits = existing.HasMember("inherits")
-						? existing["inherits"]
-						: existing.AddMember("inherits", Value(kArrayType), allocator)["inherits"];
+				// Merge INHERITS
+				if (obj.HasMember(INHERITS) && obj[INHERITS].IsArray()) {
+					if (!existing.HasMember(INHERITS)) {
+						existing.AddMember(Value(INHERITS, allocator), Value(kArrayType), allocator);
+					}
+					Value& existingInherits = existing[INHERITS];
 
-					const Value& newInherits = obj["inherits"];
+					const Value& newInherits = obj[INHERITS];
 					for (SizeType j = 0; j < newInherits.Size(); ++j) {
 						const Value& inheritVal = newInherits[j];
 
@@ -541,11 +544,11 @@ namespace IFC {
 	}
 
 	FString GetPrefabs(rapidjson::Document& doc) {
-		if (!doc.HasMember("data") || !doc["data"].IsArray()) {
+		if (!doc.HasMember(DATA) || !doc[DATA].IsArray()) {
 			return TEXT("");
 		}
 
-		auto& data = doc["data"];
+		auto& data = doc[DATA];
 		auto& allocator = doc.GetAllocator();
 
 		rapidjson::Value merged = MergePrefabs(data, allocator);
@@ -556,14 +559,16 @@ namespace IFC {
 			if (!obj || !obj->IsObject())
 				continue;
 
-			FString path = obj->HasMember("path") && (*obj)["path"].IsString()
-				? UTF8_TO_TCHAR((*obj)["path"].GetString())
+			FString path = obj->HasMember(PATH) && (*obj)[PATH].IsString()
+				? UTF8_TO_TCHAR((*obj)[PATH].GetString())
 				: TEXT("");
 
-			result += FString::Printf(TEXT("prefab [IFC].%s%s {\n"), *path, *GetInheritances(*obj));
-			result += GetAttributes(*obj);
-			result += GetChildren(*obj);
-			result += TEXT("}\n");
+			result += FString::Printf(TEXT("prefab %s.%s%s {\n%s%s}\n"),
+				*IFC::Scope(),
+				*path,
+				*GetInheritances(*obj),
+				*GetAttributes(*obj),
+				*GetChildren(*obj));
 		}
 
 		return result;
