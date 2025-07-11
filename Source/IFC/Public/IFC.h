@@ -39,9 +39,13 @@ namespace IFC {
 		TEXT("bsi::ifc::presentation::diffuseColor"),
 	};
 
+	static const TSet<FString> EnumAttributes = {
+		TEXT("bsi::ifc::prop::FireRating"),
+	};
+
 	IFC_API FString& Scope();
 
 	IFC_API void Register(flecs::world& world);
 
-	IFC_API void LoadIFCFile(flecs::world& world, const FString& path);
+	IFC_API void LoadIFCFiles(flecs::world& world, const TArray<FString>& paths);
 }

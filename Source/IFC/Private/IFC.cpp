@@ -63,16 +63,20 @@ namespace IFC {
 		return false;
 	}
 
-	bool CanIncludeAttributeValues(const FString& attribute) {
-		return !HasAttribute(ExcludeAtributesValues, attribute);
-	}
-
 	bool ExcludeAttribute(const FString& attribute) {
 		return HasAttribute(ExcludeAttributes, attribute);
 	}
 
+	bool CanIncludeAttributeValues(const FString& attribute) {
+		return !HasAttribute(ExcludeAtributesValues, attribute);
+	}
+
 	bool IsVectorAttribute(const FString& attribute) {
 		return HasAttribute(VectorAttributes, attribute);
+	}
+
+	bool IsEnumAttribute(const FString& attribute) {
+		return HasAttribute(EnumAttributes, attribute);
 	}
 
 	FString FormatAttributeName(const FString& fullName) {
@@ -148,11 +152,16 @@ namespace IFC {
 		return TEXT("1");
 	}
 
-	FString ProcessAttributes(const Value& attributes, const TArray<FString>& attrNames, const TArray<bool>& isVectors, const TArray<bool>& includeAttributesValues) {
+	FString ProcessAttributes(
+		const Value& attributes, 
+		const TArray<FString>& names, 
+		const TArray<bool>& includeValues, 
+		const TArray<bool>& vectors,
+		const TArray<bool>& enums) {
 		FString result;
 
-		for (int32 i = 0; i < attrNames.Num(); ++i) {
-			const FString& attrName = attrNames[i];
+		for (int32 i = 0; i < names.Num(); ++i) {
+			const FString& attrName = names[i];
 			if (ExcludeAttribute(attrName))
 				continue;
 
@@ -166,19 +175,13 @@ namespace IFC {
 			const Value& attrValue = memberItr->value;
 			FString name = FormatAttributeName(attrName);
 
-			if (!includeAttributesValues[i]) {
-				result += FString::Printf(TEXT("\t%s\n"), *name);
-				continue;
-			}
-
-			// Boolean true: print only name
-			if (attrValue.IsBool() && attrValue.GetBool() == true) {
+			if (!includeValues[i]) {
 				result += FString::Printf(TEXT("\t%s\n"), *name);
 				continue;
 			}
 
 			// Vector attribute
-			if (attrValue.IsArray() && isVectors[i]) {
+			if (vectors[i]) {
 				result += FString::Printf(TEXT("\t%s: {{"), *name);
 				for (SizeType j = 0; j < attrValue.Size(); ++j) {
 					if (j > 0) result += TEXT(", ");
@@ -188,6 +191,18 @@ namespace IFC {
 					result += TEXT(", ") + GetOpacity(attributes);
 				}
 				result += TEXT("}}\n");
+				continue;
+			}
+
+			// Enum attribute
+			if (enums[i]) {
+				result += FString::Printf(TEXT("\t(%s, %s)\n"), *name, UTF8_TO_TCHAR(attrValue.GetString()));
+				continue;
+			}
+
+			// Boolean true: print only name
+			if (attrValue.IsBool() && attrValue.GetBool() == true) {
+				result += FString::Printf(TEXT("\t%s\n"), *name);
 				continue;
 			}
 
@@ -217,21 +232,24 @@ namespace IFC {
 			return TEXT("");
 
 		const Value& attributes = obj[ATTRIBUTES];
-		TArray<FString> attrNames;
-		TArray<bool> isVectorFlags;
-		TArray<bool> includeAttributesValues;
+		TArray<FString> names;
+		TArray<bool> vectors;
+		TArray<bool> enums;
+		TArray<bool> includeValues;
 
 		for (auto itr = attributes.MemberBegin(); itr != attributes.MemberEnd(); ++itr) {
 			FString attrName = UTF8_TO_TCHAR(itr->name.GetString());
 			bool isVector = IsVectorAttribute(attrName);
-			bool includeAttributeValues = CanIncludeAttributeValues(attrName) || isVector;
+			bool isEnum = IsEnumAttribute(attrName);
+			bool includeAttributeValues = CanIncludeAttributeValues(attrName) || isVector || isEnum;
 
-			attrNames.Add(attrName);
-			isVectorFlags.Add(isVector);
-			includeAttributesValues.Add(includeAttributeValues);
+			names.Add(attrName);
+			vectors.Add(isVector);
+			enums.Add(isEnum);
+			includeValues.Add(includeAttributeValues);
 		}
 
-		return ProcessAttributes(attributes, attrNames, isVectorFlags, includeAttributesValues);
+		return ProcessAttributes(attributes, names, includeValues, vectors, enums);
 	}
 
 #pragma endregion
@@ -340,7 +358,7 @@ namespace IFC {
 
 		return sortedObjects;
 	}
-	
+
 	void MergeObjectMembers(Value& target, const Value& source, const char* memberName, Document::AllocatorType& allocator) {
 		if (!source.HasMember(memberName) || !source[memberName].IsObject())
 			return;
@@ -391,13 +409,10 @@ namespace IFC {
 		return mergedArray;
 	}
 
-	FString GetPrefabs(rapidjson::Document& doc) {
-		if (!doc.HasMember(DATA) || !doc[DATA].IsArray()) {
+	FString GetPrefabs(const rapidjson::Value& data, rapidjson::Document::AllocatorType& allocator) {
+		if (!data.IsArray()) {
 			return TEXT("");
 		}
-
-		auto& data = doc[DATA];
-		auto& allocator = doc.GetAllocator();
 
 		rapidjson::Value merged = Merge(data, allocator);
 		TArray<const rapidjson::Value*> sorted = Sort(merged);
@@ -447,22 +462,41 @@ namespace IFC {
 
 		return result;
 	}
+	
+	void LoadIFCFiles(flecs::world& world, const TArray<FString>& paths) {
+		rapidjson::Document::AllocatorType allocator;
+		rapidjson::Document tempDoc;
+		allocator = tempDoc.GetAllocator();
 
-	void LoadIFCFile(flecs::world& world, const FString& path) {
-		auto jsonString = Assets::LoadTextFile(path);
-		auto formated = FormatUUIDs(jsonString);
-		free(jsonString);
+		rapidjson::Value combinedData(rapidjson::kArrayType);
 
-		Document doc;
+		for (const FString& path : paths) {
+			auto jsonString = Assets::LoadTextFile(path);
+			auto formatted = FormatUUIDs(jsonString);
+			free(jsonString);
 
-		if (doc.Parse(TCHAR_TO_UTF8(*formated)).HasParseError()) {
-			UE_LOG(LogTemp, Error, TEXT("Parse error: %s"), *FString(GetParseError_En(doc.GetParseError())));
-			return;
+			rapidjson::Document doc;
+			if (doc.Parse(TCHAR_TO_UTF8(*formatted)).HasParseError()) {
+				UE_LOG(LogTemp, Error, TEXT(">>> Parse error in file %s: %s"), *path, *FString(GetParseError_En(doc.GetParseError())));
+				continue;
+			}
+
+			if (!doc.HasMember(DATA) || !doc[DATA].IsArray()) {
+				UE_LOG(LogTemp, Warning, TEXT(">>> No valid data array in file: %s"), *path);
+				continue;
+			}
+
+			for (const auto& entry : doc[DATA].GetArray()) {
+				rapidjson::Value copy(entry, allocator);
+				combinedData.PushBack(copy, allocator);
+			}
 		}
 
-		FString prefabs = GetPrefabs(doc);
-		UE_LOG(LogTemp, Log, TEXT(">>> Prefabs:\n%s"), *prefabs);
+		FString prefabs = GetPrefabs(combinedData, allocator);
+		UE_LOG(LogTemp, Log, TEXT(">>> Combined Prefabs:\n%s"), *prefabs);
 
-		ECS::RunScript(world, path, prefabs);
+		if (paths.Num() > 0) {
+			ECS::RunScript(world, paths[0], prefabs);
+		}
 	}
 }

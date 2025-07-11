@@ -23,6 +23,7 @@ namespace IFC {
 	struct bsi_ifc_prop_Height { float Value; };
 	struct bsi_ifc_prop_Station { float Value; };
 	struct bsi_ifc_prop_TypeName { FString Value; };
+	enum bsi_ifc_prop_FireRating { R30, R60 };
 
 	// https://ifcx.dev/@standards.buildingsmart.org/ifc/ifc-mat/prop@v1.0.0.ifcx
 	struct bsi_ifc_mat_prop_StrengthClass { FString Value; };
