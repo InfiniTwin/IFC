@@ -79,7 +79,7 @@ namespace IFC {
 		return HasAttribute(EnumAttributes, attribute);
 	}
 
-	FString FormatAttributeName(const FString& fullName) {
+	FString FormatName(const FString& fullName) {
 		FString formatted = fullName;
 		for (const FString& symbol : { TEXT("::"), TEXT("-") }) {
 			formatted = formatted.Replace(*symbol, TEXT("_"));
@@ -153,9 +153,9 @@ namespace IFC {
 	}
 
 	FString ProcessAttributes(
-		const Value& attributes, 
-		const TArray<FString>& names, 
-		const TArray<bool>& includeValues, 
+		const Value& attributes,
+		const TArray<FString>& names,
+		const TArray<bool>& includeValues,
 		const TArray<bool>& vectors,
 		const TArray<bool>& enums) {
 		FString result;
@@ -173,7 +173,7 @@ namespace IFC {
 				continue;
 
 			const Value& attrValue = memberItr->value;
-			FString name = FormatAttributeName(attrName);
+			FString name = FormatName(attrName);
 
 			if (!includeValues[i]) {
 				result += FString::Printf(TEXT("\t%s\n"), *name);
@@ -282,7 +282,7 @@ namespace IFC {
 		FString result;
 
 		for (auto itr = children.MemberBegin(); itr != children.MemberEnd(); ++itr) {
-			const FString key = UTF8_TO_TCHAR(itr->name.GetString());
+			const FString key = FormatName(UTF8_TO_TCHAR(itr->name.GetString()));
 			const Value& val = itr->value;
 
 			if (val.IsString()) {
@@ -456,7 +456,7 @@ namespace IFC {
 
 		return result;
 	}
-	
+
 	void LoadIFCFiles(flecs::world& world, const TArray<FString>& paths) {
 		rapidjson::Document::AllocatorType allocator;
 		rapidjson::Document tempDoc;
