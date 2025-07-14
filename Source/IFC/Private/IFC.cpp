@@ -486,11 +486,11 @@ namespace IFC {
 			}
 		}
 
-		FString prefabs = GetPrefabs(combinedData, allocator);
-		UE_LOG(LogTemp, Log, TEXT(">>> Combined Prefabs:\n%s"), *prefabs);
+		FString code = GetPrefabs(combinedData, allocator);
+		UE_LOG(LogTemp, Log, TEXT(">>> Combined Prefabs:\n%s"), *code);
 
 		if (paths.Num() > 0) {
-			ECS::RunScript(world, paths[0], prefabs);
+			ECS::RunCode(world, paths[0], code);
 		}
 	}
 }
