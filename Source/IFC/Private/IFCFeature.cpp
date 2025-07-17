@@ -1,11 +1,17 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "IFCFeature.h"
+#include "IFC.h"
+#include "ActionFeature.h"
+#include "Assets.h"
 
 namespace IFC {
 	void IFCFeature::RegisterComponents(flecs::world& world) {
 		using namespace ECS;
 
+		world.component<Layer>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
+
+#pragma region Attributes
 		world.component<bsi_ifc_presentation_diffuseColor>().member<FLinearColor>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<bsi_ifc_class>()
 			.member<FString>(MEMBER(bsi_ifc_class::Code))
@@ -45,10 +51,24 @@ namespace IFC {
 		using namespace ECS;
 		world.component<usd_xformop>().member<TArray<FVector4f>>(MEMBER(usd_xformop::Transform)).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<usd_usdgeom_basiscurves>().member<TArray<FVector3f>>(MEMBER(usd_usdgeom_basiscurves::Points)).add(flecs::OnInstantiate, flecs::Inherit);
-	
+
 		world.component<nlsfb_class>()
 			.member<FString>(MEMBER(nlsfb_class::Code))
 			.member<FString>(MEMBER(nlsfb_class::Uri))
 			.add(flecs::OnInstantiate, flecs::Inherit);
+#pragma endregion
+	}
+
+	void IFCFeature::CreateSystems(flecs::world& world) {
+		world.system<>("TriggerActionAddLayers")
+			.with<Operation>(flecs::Wildcard)
+			.with<Layer>()
+			.with<Action>().id_flags(flecs::TOGGLE).with<Action>()
+			.each([&world](flecs::entity action) {
+			action.disable<Action>();
+			if (!action.has(Operation::Add)) return;
+			auto layers = Assets::SelectFiles("Load IFC files", FPaths::ProjectContentDir(), TEXT("IFC 5 Files (*.ifcx)|*.ifcx"));
+			LoadIFCFiles(world, layers);
+				});
 	}
 }

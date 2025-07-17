@@ -32,6 +32,8 @@ namespace IFC {
 
 	void Register(flecs::world& world) {
 		IFCFeature::RegisterComponents(world);
+
+		IFCFeature::CreateSystems(world);
 	}
 
 	FString FormatUUIDs(const FString& input) {

@@ -14,6 +14,8 @@ public:
 };
 
 namespace IFC {
+	inline constexpr TCHAR IfcExtension[] = TEXT(".ifcx");
+
 	constexpr const char* DATA = "data";
 	constexpr const char* PATH = "path";
 	constexpr const char* ATTRIBUTES = "attributes";

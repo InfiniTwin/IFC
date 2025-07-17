@@ -9,8 +9,12 @@
 namespace IFC {
 	struct IFCFeature {
 		static void RegisterComponents(flecs::world& world);
+		static void CreateSystems(flecs::world& world);
 	};
 
+	struct Layer { FString Value; };
+
+#pragma region Attributes
 	// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
 	struct bsi_ifc_presentation_diffuseColor { FLinearColor Value; };
 	struct bsi_ifc_class { FString Code, Uri; };
@@ -43,4 +47,5 @@ namespace IFC {
 
 	// "https://ifcx.dev/@nlsfb/nlsfb@v1.ifcx"
 	struct nlsfb_class { FString Code, Uri; };
+#pragma endregion
 }
