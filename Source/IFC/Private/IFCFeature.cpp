@@ -4,6 +4,7 @@
 #include "IFC.h"
 #include "ActionFeature.h"
 #include "Assets.h"
+#include "TypographyFeature.h"
 
 namespace IFC {
 	void IFCFeature::RegisterComponents(flecs::world& world) {
@@ -67,7 +68,12 @@ namespace IFC {
 			.each([&world](flecs::entity action) {
 			action.disable<Action>();
 			if (!action.has(Operation::Add)) return;
-			auto layers = Assets::SelectFiles("Load IFC files", FPaths::ProjectContentDir(), TEXT("IFC 5 Files (*.ifcx)|*.ifcx"));
+
+			auto layers = Assets::SelectFiles(
+			    UI::GetLocalizedText(world, SelectIfcDialogTitle),
+				FPaths::ProjectContentDir(),
+				SelectIfcDialogFileType);
+
 			LoadIFCFiles(world, layers);
 				});
 	}

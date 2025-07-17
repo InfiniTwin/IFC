@@ -12,6 +12,7 @@ public class IFC : ModuleRules
 			"Core",
 			"FlecsLibrary",
 			"ECSCore",
+			"UIElements",
 		});
 
 

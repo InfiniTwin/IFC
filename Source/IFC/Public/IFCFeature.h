@@ -12,6 +12,9 @@ namespace IFC {
 		static void CreateSystems(flecs::world& world);
 	};
 
+	inline constexpr TCHAR SelectIfcDialogTitle[] = TEXT("IT::LoadIfcDialogTitle");
+	inline constexpr TCHAR SelectIfcDialogFileType[] = TEXT("IFC 5 (*.ifcx)|*.ifcx");
+
 	struct Layer { FString Value; };
 
 #pragma region Attributes
