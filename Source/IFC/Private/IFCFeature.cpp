@@ -62,12 +62,11 @@ namespace IFC {
 
 	void IFCFeature::CreateSystems(flecs::world& world) {
 		world.system<>("TriggerActionAddLayers")
-			.with<Operation>(flecs::Wildcard)
+			.with(Operation::Add)
 			.with<Layer>()
 			.with<Action>().id_flags(flecs::TOGGLE).with<Action>()
 			.each([&world](flecs::entity action) {
 			action.disable<Action>();
-			if (!action.has(Operation::Add)) return;
 
 			auto layers = Assets::SelectFiles(
 			    UI::GetLocalizedText(world, SelectIfcDialogTitle),

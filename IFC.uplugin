@@ -25,6 +25,10 @@
 		{
 			"Name": "ECS",
 			"Enabled": true
+		},
+		{
+			"Name": "UIElements",
+			"Enabled": true
 		}
 	]
 }
