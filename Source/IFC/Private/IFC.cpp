@@ -92,22 +92,17 @@ namespace IFC {
 	FString FormatAttributeValue(const Value& val, bool isInnerArray = false) {
 		if (val.IsString()) {
 			return FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(val.GetString())));
-		}
-		else if (val.IsNumber()) {
+		} else if (val.IsNumber()) {
 			if (val.IsDouble() || val.IsFloat()) {
 				return FString::SanitizeFloat(val.GetDouble());
-			}
-			else if (val.IsInt64()) {
+			} else if (val.IsInt64()) {
 				return FString::Printf(TEXT("%lld"), val.GetInt64());
-			}
-			else {
+			} else {
 				return FString::Printf(TEXT("%d"), val.GetInt());
 			}
-		}
-		else if (val.IsBool()) {
+		} else if (val.IsBool()) {
 			return val.GetBool() ? TEXT("true") : TEXT("false");
-		}
-		else if (val.IsArray()) {
+		} else if (val.IsArray()) {
 			FString result;
 
 			if (isInnerArray) {
@@ -118,8 +113,7 @@ namespace IFC {
 					result += FormatAttributeValue(val[i]);
 				}
 				result += TEXT("}}");
-			}
-			else {
+			} else {
 				// Outer array: use square brackets
 				result += TEXT("[");
 				for (SizeType i = 0; i < val.Size(); ++i) {
@@ -127,19 +121,16 @@ namespace IFC {
 					// If this element is an array, format it as inner array
 					if (val[i].IsArray()) {
 						result += FormatAttributeValue(val[i], true);
-					}
-					else {
+					} else {
 						result += FormatAttributeValue(val[i]);
 					}
 				}
 				result += TEXT("]");
 			}
 			return result;
-		}
-		else if (val.IsObject()) {
+		} else if (val.IsObject()) {
 			return TEXT("\"{object}\"");
-		}
-		else {
+		} else {
 			return TEXT("\"UNKNOWN\"");
 		}
 	}
@@ -218,8 +209,7 @@ namespace IFC {
 					first = false;
 					result += FormatAttributeValue(it->value);
 				}
-			}
-			else {
+			} else {
 				result += FormatAttributeValue(attrValue);
 			}
 
@@ -342,9 +332,9 @@ namespace IFC {
 		dependencies.GetKeys(sortedIds);
 
 		// Step 4: Sort them using correct lambda: return array of dependencies for given node
-		bool success = Algo::TopologicalSort(sortedIds, [&dependencies](const FString& id) -> const TArray<FString>&{
+		bool success = Algo::TopologicalSort(sortedIds, [&dependencies](const FString& id) -> const TArray<FString>& {
 			return dependencies[id]; // id depends on these
-			});
+		});
 
 		if (!success) {
 			UE_LOG(LogTemp, Warning, TEXT("Cyclic dependency detected in prefab graph."));
@@ -395,8 +385,7 @@ namespace IFC {
 				Value newObj(kObjectType);
 				newObj.CopyFrom(obj, allocator);
 				mergedObjects.Add(pathStr, MoveTemp(newObj));
-			}
-			else {
+			} else {
 				Value& existing = mergedObjects[pathStr];
 				MergeObjectMembers(existing, obj, INHERITS, allocator);
 				MergeObjectMembers(existing, obj, ATTRIBUTES, allocator);
@@ -412,17 +401,11 @@ namespace IFC {
 		return mergedArray;
 	}
 
-	FString GetPrefabs(const rapidjson::Value& data, rapidjson::Document::AllocatorType& allocator) {
-		if (!data.IsArray()) {
-			return TEXT("");
-		}
-
+	FString GetPrefabsAndEntities(const rapidjson::Value& data, rapidjson::Document::AllocatorType& allocator) {
 		rapidjson::Value merged = Merge(data, allocator);
 		TArray<const rapidjson::Value*> sorted = Sort(merged);
-		FString result;
 
-		// Find entities: non repeating ID
-		TSet<FString> entities;
+		TSet<FString> entities; // Find entities: non repeating ID
 		for (const rapidjson::Value* obj : sorted) {
 			if (!obj || !obj->IsObject()) continue;
 			entities.Add(UTF8_TO_TCHAR((*obj)[PATH].GetString()));
@@ -441,6 +424,7 @@ namespace IFC {
 			}
 		}
 
+		FString result;
 		for (const rapidjson::Value* obj : sorted) {
 			if (!obj || !obj->IsObject()) continue;
 
@@ -455,7 +439,6 @@ namespace IFC {
 				*GetAttributes(*obj),
 				*GetChildren(*obj));
 		}
-
 		return result;
 	}
 
