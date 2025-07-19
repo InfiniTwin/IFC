@@ -1,7 +1,6 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "IFC.h"
-#include "IFCFeature.h"
 #include "Assets.h"
 #include "ECS.h"
 #include "Containers/Map.h"
@@ -31,9 +30,49 @@ namespace IFC {
 	}
 
 	void Register(flecs::world& world) {
-		IFCFeature::RegisterComponents(world);
+		using namespace ECS;
+		world.component<bsi_ifc_presentation_diffuseColor>().member<FLinearColor>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<bsi_ifc_class>()
+			.member<FString>(MEMBER(bsi_ifc_class::Code))
+			.member<FString>(MEMBER(bsi_ifc_class::Uri))
+			.add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<bsi_ifc_spaceBoundary>().add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<bsi_ifc_material>()
+			.member<FString>(MEMBER(bsi_ifc_material::Code))
+			.member<FString>(MEMBER(bsi_ifc_material::Uri))
+			.add(flecs::OnInstantiate, flecs::Inherit);
 
-		IFCFeature::CreateSystems(world);
+		world.component<bsi_ifc_prop_IsExternal>().add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<bsi_ifc_prop_Volume>().member<float>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<bsi_ifc_prop_Height>().member<float>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<bsi_ifc_prop_Station>().member<float>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<bsi_ifc_prop_TypeName>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<bsi_ifc_prop_FireRating>().add(flecs::Exclusive).add(flecs::OnInstantiate, flecs::Inherit);
+
+		world.component<bsi_ifc_mat_prop_StrengthClass>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<bsi_ifc_mat_prop_MoistureContent>().member<float>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<bsi_ifc_mat_prop_MassDensity>().member<float>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<bsi_ifc_mat_prop_GWP>()
+			.member<float>(MEMBER(bsi_ifc_mat_prop_GWP::A1_A3))
+			.member<float>(MEMBER(bsi_ifc_mat_prop_GWP::A4))
+			.member<float>(MEMBER(bsi_ifc_mat_prop_GWP::A5))
+			.member<float>(MEMBER(bsi_ifc_mat_prop_GWP::C2))
+			.member<float>(MEMBER(bsi_ifc_mat_prop_GWP::C3))
+			.member<float>(MEMBER(bsi_ifc_mat_prop_GWP::D))
+			.add(flecs::OnInstantiate, flecs::Inherit);
+
+		world.component<usd_usdgeom_mesh>()
+			.member<TArray<float>>(MEMBER(usd_usdgeom_mesh::FaceVertexIndices))
+			.member<TArray<FVector3f>>(MEMBER(usd_usdgeom_mesh::Points))
+			.add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<usd_usdgeom_visibility>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<usd_xformop>().member<TArray<FVector4f>>(MEMBER(usd_xformop::Transform)).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<usd_usdgeom_basiscurves>().member<TArray<FVector3f>>(MEMBER(usd_usdgeom_basiscurves::Points)).add(flecs::OnInstantiate, flecs::Inherit);
+
+		world.component<nlsfb_class>()
+			.member<FString>(MEMBER(nlsfb_class::Code))
+			.member<FString>(MEMBER(nlsfb_class::Uri))
+			.add(flecs::OnInstantiate, flecs::Inherit);
 	}
 
 	FString FormatUUIDs(const FString& input) {
@@ -92,17 +131,22 @@ namespace IFC {
 	FString FormatAttributeValue(const Value& val, bool isInnerArray = false) {
 		if (val.IsString()) {
 			return FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(val.GetString())));
-		} else if (val.IsNumber()) {
+		}
+		else if (val.IsNumber()) {
 			if (val.IsDouble() || val.IsFloat()) {
 				return FString::SanitizeFloat(val.GetDouble());
-			} else if (val.IsInt64()) {
+			}
+			else if (val.IsInt64()) {
 				return FString::Printf(TEXT("%lld"), val.GetInt64());
-			} else {
+			}
+			else {
 				return FString::Printf(TEXT("%d"), val.GetInt());
 			}
-		} else if (val.IsBool()) {
+		}
+		else if (val.IsBool()) {
 			return val.GetBool() ? TEXT("true") : TEXT("false");
-		} else if (val.IsArray()) {
+		}
+		else if (val.IsArray()) {
 			FString result;
 
 			if (isInnerArray) {
@@ -113,7 +157,8 @@ namespace IFC {
 					result += FormatAttributeValue(val[i]);
 				}
 				result += TEXT("}}");
-			} else {
+			}
+			else {
 				// Outer array: use square brackets
 				result += TEXT("[");
 				for (SizeType i = 0; i < val.Size(); ++i) {
@@ -121,16 +166,19 @@ namespace IFC {
 					// If this element is an array, format it as inner array
 					if (val[i].IsArray()) {
 						result += FormatAttributeValue(val[i], true);
-					} else {
+					}
+					else {
 						result += FormatAttributeValue(val[i]);
 					}
 				}
 				result += TEXT("]");
 			}
 			return result;
-		} else if (val.IsObject()) {
+		}
+		else if (val.IsObject()) {
 			return TEXT("\"{object}\"");
-		} else {
+		}
+		else {
 			return TEXT("\"UNKNOWN\"");
 		}
 	}
@@ -208,7 +256,8 @@ namespace IFC {
 					first = false;
 					result += FormatAttributeValue(it->value);
 				}
-			} else {
+			}
+			else {
 				result += FormatAttributeValue(attrValue);
 			}
 
@@ -334,9 +383,9 @@ namespace IFC {
 		dependencies.GetKeys(sortedIds);
 
 		// Step 4: Sort them using correct lambda: return array of dependencies for given node
-		bool success = Algo::TopologicalSort(sortedIds, [&dependencies](const FString& id) -> const TArray<FString>& {
+		bool success = Algo::TopologicalSort(sortedIds, [&dependencies](const FString& id) -> const TArray<FString>&{
 			return dependencies[id]; // id depends on these
-		});
+			});
 
 		if (!success) {
 			UE_LOG(LogTemp, Warning, TEXT("Cyclic dependency detected in prefab graph."));
@@ -387,7 +436,8 @@ namespace IFC {
 				Value newObj(kObjectType);
 				newObj.CopyFrom(obj, allocator);
 				mergedObjects.Add(pathStr, MoveTemp(newObj));
-			} else {
+			}
+			else {
 				Value& existing = mergedObjects[pathStr];
 				MergeObjectMembers(existing, obj, INHERITS, allocator);
 				MergeObjectMembers(existing, obj, ATTRIBUTES, allocator);
@@ -403,7 +453,7 @@ namespace IFC {
 		return mergedArray;
 	}
 
-	FString GetPrefabsAndEntities(const rapidjson::Value& data, rapidjson::Document::AllocatorType& allocator) {
+	FString ToFlecsScript(const rapidjson::Value& data, rapidjson::Document::AllocatorType& allocator) {
 		rapidjson::Value merged = Merge(data, allocator);
 		TArray<const rapidjson::Value*> sorted = Sort(merged);
 
@@ -473,11 +523,8 @@ namespace IFC {
 			}
 		}
 
-		FString code = GetPrefabsAndEntities(combinedData, allocator);
-		UE_LOG(LogTemp, Log, TEXT(">>> Combined Prefabs:\n%s"), *code);
-
-		if (paths.Num() > 0) {
-			ECS::RunCode(world, paths[0], code);
-		}
+		FString code = ToFlecsScript(combinedData, allocator);
+		UE_LOG(LogTemp, Log, TEXT(">>> IFC:\n%s"), *code);
+		ECS::RunCode(world, paths[0], code);
 	}
 }
