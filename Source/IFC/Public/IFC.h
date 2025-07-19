@@ -19,6 +19,7 @@ namespace IFC {
 	constexpr const char* ATTRIBUTES = "attributes";
 	constexpr const char* INHERITS = "inherits";
 	constexpr const char* CHILDREN = "children";
+	constexpr const TCHAR* PREFAB = TEXT("prefab ");
 
 	constexpr const char* DIFFUSECOLOR_COMPONENT = "bsi_ifc_presentation_diffuseColor";
 	constexpr const char* OPACITY_ATTRIBUTE = "bsi::ifc::presentation::opacity";

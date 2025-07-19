@@ -138,9 +138,8 @@ namespace IFC {
 	FString GetOpacity(const Value& attributes) {
 		for (auto itr = attributes.MemberBegin(); itr != attributes.MemberEnd(); ++itr) {
 			FString name = UTF8_TO_TCHAR(itr->name.GetString());
-			if (name.Equals(OPACITY_ATTRIBUTE)) {
+			if (name.Equals(OPACITY_ATTRIBUTE))
 				return FormatAttributeValue(itr->value);
-			}
 		}
 		return TEXT("1");
 	}
@@ -266,7 +265,7 @@ namespace IFC {
 		return TEXT(": ") + FString::Join(inheritIDs, TEXT(", "));
 	}
 
-	FString GetChildren(const Value& obj) {
+	FString GetChildren(const Value& obj, bool isPrefab) {
 		if (!obj.HasMember(CHILDREN) || !obj[CHILDREN].IsObject())
 			return TEXT("");
 
@@ -279,7 +278,10 @@ namespace IFC {
 
 			if (val.IsString()) {
 				const FString valueStr = UTF8_TO_TCHAR(val.GetString());
-				result += FString::Printf(TEXT("    %s: %s {}\n"), *key, *valueStr);
+				result += FString::Printf(TEXT("\t%s%s: %s {}\n"),
+					isPrefab ? PREFAB : TEXT(""),
+					*key,
+					*valueStr);
 			}
 		}
 
@@ -432,12 +434,12 @@ namespace IFC {
 			bool isPrefab = !entities.Contains(path);
 
 			result += FString::Printf(TEXT("%s%s.%s%s {\n%s%s}\n"),
-				isPrefab ? TEXT("prefab ") : TEXT(""),
+				isPrefab ? PREFAB : TEXT(""),
 				*IFC::Scope(),
 				*path,
 				*GetInheritances(*obj),
 				*GetAttributes(*obj),
-				*GetChildren(*obj));
+				*GetChildren(*obj, isPrefab));
 		}
 		return result;
 	}
@@ -471,7 +473,7 @@ namespace IFC {
 			}
 		}
 
-		FString code = GetPrefabs(combinedData, allocator);
+		FString code = GetPrefabsAndEntities(combinedData, allocator);
 		UE_LOG(LogTemp, Log, TEXT(">>> Combined Prefabs:\n%s"), *code);
 
 		if (paths.Num() > 0) {
