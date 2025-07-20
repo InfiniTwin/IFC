@@ -31,6 +31,13 @@ namespace IFC {
 
 	void Register(flecs::world& world) {
 		using namespace ECS;
+
+		world.component<Layer>().member<FString>(VALUE);
+		world.component<Id>().member<FString>(VALUE);
+		world.component<Version>().member<FString>(VALUE);
+		world.component<Author>().member<FString>(VALUE);
+		world.component<Timestamp>().member<FString>(VALUE);
+
 		world.component<bsi_ifc_presentation_diffuseColor>().member<FLinearColor>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<bsi_ifc_class>()
 			.member<FString>(MEMBER(bsi_ifc_class::Code))
@@ -294,6 +301,7 @@ namespace IFC {
 
 #pragma endregion
 
+#pragma region Data
 	FString GetInheritances(const Value& obj) {
 		if (!obj.HasMember(INHERITS) || !obj[INHERITS].IsObject())
 			return TEXT("");
@@ -453,7 +461,7 @@ namespace IFC {
 		return mergedArray;
 	}
 
-	FString ToFlecsScript(const rapidjson::Value& data, rapidjson::Document::AllocatorType& allocator) {
+	FString ParseData(const rapidjson::Value& data, rapidjson::Document::AllocatorType& allocator) {
 		rapidjson::Value merged = Merge(data, allocator);
 		TArray<const rapidjson::Value*> sorted = Sort(merged);
 
@@ -464,16 +472,12 @@ namespace IFC {
 		}
 		for (const rapidjson::Value* obj : sorted) {
 			if (!obj || !obj->IsObject()) continue;
-			if ((*obj).HasMember(CHILDREN) && (*obj)[CHILDREN].IsObject()) {
-				for (auto& child : (*obj)[CHILDREN].GetObject()) {
+			if ((*obj).HasMember(CHILDREN) && (*obj)[CHILDREN].IsObject())
+				for (auto& child : (*obj)[CHILDREN].GetObject())
 					entities.Remove(UTF8_TO_TCHAR(child.value.GetString()));
-				}
-			}
-			if ((*obj).HasMember(INHERITS) && (*obj)[INHERITS].IsObject()) {
-				for (auto& inherit : (*obj)[INHERITS].GetObject()) {
+			if ((*obj).HasMember(INHERITS) && (*obj)[INHERITS].IsObject())
+				for (auto& inherit : (*obj)[INHERITS].GetObject())
 					entities.Remove(UTF8_TO_TCHAR(inherit.value.GetString()));
-				}
-			}
 		}
 
 		FString result;
@@ -493,13 +497,36 @@ namespace IFC {
 		}
 		return result;
 	}
+#pragma endregion
+
+	FString ParseLayers(const rapidjson::Value& header) {
+		FString layerName = FormatUUIDs(FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens));
+		FString result = FString::Printf(TEXT("%s.%s {\n"), *IFC::Scope(), *layerName);
+
+		for (auto it = header.MemberBegin(); it != header.MemberEnd(); ++it) {
+			FString componentName = UTF8_TO_TCHAR(it->name.GetString());
+			componentName[0] = FChar::ToUpper(componentName[0]);
+			FString component = IFC::FormatName(componentName);
+
+			const auto& val = it->value;
+			FString value = IFC::FormatAttributeValue(val);
+
+			result += FString::Printf(TEXT("\t%s: {%s}\n"), *component, *value);
+		}
+
+		result += TEXT("}\n");
+		return result;
+	}
 
 	void LoadIFCFiles(flecs::world& world, const TArray<FString>& paths) {
+		if (paths.Num() < 1) return;
+
 		rapidjson::Document::AllocatorType allocator;
 		rapidjson::Document tempDoc;
 		allocator = tempDoc.GetAllocator();
 
 		rapidjson::Value combinedData(rapidjson::kArrayType);
+		FString code;
 
 		for (const FString& path : paths) {
 			auto jsonString = Assets::LoadTextFile(path);
@@ -512,6 +539,13 @@ namespace IFC {
 				continue;
 			}
 
+			if (!doc.HasMember(HEADER) || !doc[HEADER].IsObject()) {
+				UE_LOG(LogTemp, Warning, TEXT(">>> No valid header in file: %s"), *path);
+				continue;
+			}
+
+			code += ParseLayers(doc[HEADER]);
+
 			if (!doc.HasMember(DATA) || !doc[DATA].IsArray()) {
 				UE_LOG(LogTemp, Warning, TEXT(">>> No valid data array in file: %s"), *path);
 				continue;
@@ -523,7 +557,7 @@ namespace IFC {
 			}
 		}
 
-		FString code = ToFlecsScript(combinedData, allocator);
+		code += ParseData(combinedData, allocator);
 		UE_LOG(LogTemp, Log, TEXT(">>> IFC:\n%s"), *code);
 		ECS::RunCode(world, paths[0], code);
 	}

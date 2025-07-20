@@ -16,6 +16,7 @@ public:
 
 namespace IFC {
 #pragma region IFC
+	constexpr const char* HEADER = "header";
 	constexpr const char* DATA = "data";
 	constexpr const char* PATH = "path";
 	constexpr const char* ATTRIBUTES = "attributes";
@@ -58,6 +59,12 @@ namespace IFC {
 	inline constexpr TCHAR SelectIfcDialogFileType[] = TEXT("IFC 5 (*.ifcx)|*.ifcx");
 
 	using namespace ECS;
+
+	struct Layer { FString Value; };
+	struct Id { FString Value; };
+	struct Version { FString Value; };
+	struct Author { FString Value; };
+	struct Timestamp { FString Value; };
 
 	// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
 	struct bsi_ifc_presentation_diffuseColor { FLinearColor Value; };
