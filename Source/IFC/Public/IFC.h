@@ -24,6 +24,8 @@ namespace IFC {
 	constexpr const char* CHILDREN = "children";
 	constexpr const TCHAR* PREFAB = TEXT("prefab ");
 
+	constexpr const char* OWNER = COMPONENT(Owner);
+
 	constexpr const char* DIFFUSECOLOR_COMPONENT = "bsi_ifc_presentation_diffuseColor";
 	constexpr const char* OPACITY_ATTRIBUTE = "bsi::ifc::presentation::opacity";
 
@@ -63,11 +65,13 @@ namespace IFC {
 
 	using namespace ECS;
 
-	struct Layer { FString Value; };
+	struct Layer {};
 	struct Id { FString Value; };
 	struct Version { FString Value; };
 	struct Author { FString Value; };
 	struct Timestamp { FString Value; };
+
+	struct Owner { FString Value; };
 
 	// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
 	struct bsi_ifc_presentation_diffuseColor { FLinearColor Value; };

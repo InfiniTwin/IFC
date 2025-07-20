@@ -32,11 +32,13 @@ namespace IFC {
 	void Register(flecs::world& world) {
 		using namespace ECS;
 
-		world.component<Layer>().member<FString>(VALUE);
+		world.component<Layer>();
 		world.component<Id>().member<FString>(VALUE);
 		world.component<Version>().member<FString>(VALUE);
 		world.component<Author>().member<FString>(VALUE);
 		world.component<Timestamp>().member<FString>(VALUE);
+
+		world.component<Owner>().member<FString>(VALUE);
 
 		world.component<bsi_ifc_presentation_diffuseColor>().member<FLinearColor>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<bsi_ifc_class>()
@@ -140,46 +142,46 @@ namespace IFC {
 		return formatted;
 	}
 
-	FString FormatAttributeValue(const Value& val, bool isInnerArray = false) {
-		if (val.IsString())
-			return FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(val.GetString())));
-		else if (val.IsNumber()) {
-			if (val.IsDouble() || val.IsFloat())
-				return FString::SanitizeFloat(val.GetDouble());
-			else if (val.IsInt64())
-				return FString::Printf(TEXT("%lld"), val.GetInt64());
+	FString FormatAttributeValue(const Value& value, bool isInnerArray = false) {
+		if (value.IsString())
+			return FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(value.GetString())));
+		else if (value.IsNumber()) {
+			if (value.IsDouble() || value.IsFloat())
+				return FString::SanitizeFloat(value.GetDouble());
+			else if (value.IsInt64())
+				return FString::Printf(TEXT("%lld"), value.GetInt64());
 			else
-				return FString::Printf(TEXT("%d"), val.GetInt());
+				return FString::Printf(TEXT("%d"), value.GetInt());
 		}
-		else if (val.IsBool())
-			return val.GetBool() ? TEXT("true") : TEXT("false");
-		else if (val.IsArray()) {
+		else if (value.IsBool())
+			return value.GetBool() ? TEXT("true") : TEXT("false");
+		else if (value.IsArray()) {
 			FString result;
 
 			if (isInnerArray) { // Inner array: use double curly braces				
 				result += TEXT("{{");
-				for (SizeType i = 0; i < val.Size(); ++i) {
+				for (SizeType i = 0; i < value.Size(); ++i) {
 					if (i > 0)
 						result += TEXT(", ");
-					result += FormatAttributeValue(val[i]);
+					result += FormatAttributeValue(value[i]);
 				}
 				result += TEXT("}}");
 			}
 			else { // Outer array: use square brackets				
 				result += TEXT("[");
-				for (SizeType i = 0; i < val.Size(); ++i) {
+				for (SizeType i = 0; i < value.Size(); ++i) {
 					if (i > 0)
 						result += TEXT(", ");
-					if (val[i].IsArray()) // If this element is an array, format it as inner array
-						result += FormatAttributeValue(val[i], true);
+					if (value[i].IsArray()) // If this element is an array, format it as inner array
+						result += FormatAttributeValue(value[i], true);
 					else
-						result += FormatAttributeValue(val[i]);
+						result += FormatAttributeValue(value[i]);
 				}
 				result += TEXT("]");
 			}
 			return result;
 		}
-		else if (val.IsObject())
+		else if (value.IsObject())
 			return TEXT("\"{object}\"");
 		else
 			return TEXT("\"UNKNOWN\"");
@@ -277,11 +279,11 @@ namespace IFC {
 		return result;
 	}
 
-	FString GetAttributes(const Value& obj) {
-		if (!obj.HasMember(ATTRIBUTES) || !obj[ATTRIBUTES].IsObject())
+	FString GetAttributes(const Value& object) {
+		if (!object.HasMember(ATTRIBUTES) || !object[ATTRIBUTES].IsObject())
 			return TEXT("");
 
-		const Value& attributes = obj[ATTRIBUTES];
+		const Value& attributes = object[ATTRIBUTES];
 		TArray<FString> names;
 		TArray<bool> enums;
 		TArray<bool> vectors;
@@ -308,17 +310,22 @@ namespace IFC {
 #pragma endregion
 
 #pragma region Data
-	FString GetInheritances(const Value& obj) {
-		if (!obj.HasMember(INHERITS) || !obj[INHERITS].IsObject())
+	FString GetOwner(const Value& object) {
+		const FString ownerId = UTF8_TO_TCHAR(object[OWNER].GetString());
+		return FString::Printf(TEXT("%s: {\"%s\"}"), UTF8_TO_TCHAR(OWNER), *ownerId);
+	}
+
+	FString GetInheritances(const Value& object) {
+		if (!object.HasMember(INHERITS) || !object[INHERITS].IsObject())
 			return TEXT("");
 
-		const Value& inherits = obj[INHERITS];
+		const Value& inherits = object[INHERITS];
 		TArray<FString> inheritIDs;
 
 		for (auto itr = inherits.MemberBegin(); itr != inherits.MemberEnd(); ++itr) {
-			const Value& val = itr->value;
-			if (val.IsString()) {
-				inheritIDs.Add(UTF8_TO_TCHAR(val.GetString()));
+			const Value& value = itr->value;
+			if (value.IsString()) {
+				inheritIDs.Add(UTF8_TO_TCHAR(value.GetString()));
 			}
 		}
 
@@ -328,23 +335,26 @@ namespace IFC {
 		return TEXT(": ") + FString::Join(inheritIDs, TEXT(", "));
 	}
 
-	FString GetChildren(const Value& obj, bool isPrefab) {
-		if (!obj.HasMember(CHILDREN) || !obj[CHILDREN].IsObject())
+	FString GetChildren(const Value& object, bool isPrefab) {
+		if (!object.HasMember(CHILDREN) || !object[CHILDREN].IsObject())
 			return TEXT("");
 
-		const Value& children = obj[CHILDREN];
+		const FString owner = GetOwner(object);
+		const Value& children = object[CHILDREN];
 		FString result;
 
 		for (auto itr = children.MemberBegin(); itr != children.MemberEnd(); ++itr) {
-			const FString key = FormatName(UTF8_TO_TCHAR(itr->name.GetString()));
-			const Value& val = itr->value;
+			const FString name = FormatName(UTF8_TO_TCHAR(itr->name.GetString()));
+			const Value& value = itr->value;
 
-			if (val.IsString()) {
-				const FString valueStr = UTF8_TO_TCHAR(val.GetString());
-				result += FString::Printf(TEXT("\t%s%s: %s {}\n"),
+			if (value.IsString()) {
+				const FString inheritance = UTF8_TO_TCHAR(value.GetString());
+
+				result += FString::Printf(TEXT("\t%s%s: %s {%s}\n"),
 					isPrefab ? PREFAB : TEXT(""),
-					*key,
-					*valueStr);
+					*name,
+					*inheritance,
+					*owner);
 			}
 		}
 
@@ -429,9 +439,9 @@ namespace IFC {
 
 		for (auto itr = sourceObject.MemberBegin(); itr != sourceObject.MemberEnd(); ++itr) {
 			Value key(itr->name, allocator);
-			Value val(itr->value, allocator);
+			Value value(itr->value, allocator);
 			targetObject.RemoveMember(key);
-			targetObject.AddMember(key, val, allocator);
+			targetObject.AddMember(key, value, allocator);
 		}
 	}
 
@@ -440,22 +450,22 @@ namespace IFC {
 		TMap<FString, Value> mergedObjects;
 
 		for (SizeType i = 0; i < inputArray.Size(); ++i) {
-			const Value& obj = inputArray[i];
-			if (!obj.IsObject() || !obj.HasMember(PATH) || !obj[PATH].IsString())
+			const Value& object = inputArray[i];
+			if (!object.IsObject() || !object.HasMember(PATH) || !object[PATH].IsString())
 				continue;
 
-			FString pathStr = UTF8_TO_TCHAR(obj[PATH].GetString());
+			FString pathStr = UTF8_TO_TCHAR(object[PATH].GetString());
 
 			if (!mergedObjects.Contains(pathStr)) {
 				Value newObj(kObjectType);
-				newObj.CopyFrom(obj, allocator);
+				newObj.CopyFrom(object, allocator);
 				mergedObjects.Add(pathStr, MoveTemp(newObj));
 			}
 			else {
 				Value& existing = mergedObjects[pathStr];
-				MergeObjectMembers(existing, obj, INHERITS, allocator);
-				MergeObjectMembers(existing, obj, ATTRIBUTES, allocator);
-				MergeObjectMembers(existing, obj, CHILDREN, allocator);
+				MergeObjectMembers(existing, object, INHERITS, allocator);
+				MergeObjectMembers(existing, object, ATTRIBUTES, allocator);
+				MergeObjectMembers(existing, object, CHILDREN, allocator);
 			}
 		}
 
@@ -472,65 +482,69 @@ namespace IFC {
 		TArray<const rapidjson::Value*> sorted = Sort(merged);
 
 		TSet<FString> entities; // Find entities: non repeating ID
-		for (const rapidjson::Value* obj : sorted) {
-			if (!obj || !obj->IsObject()) continue;
-			entities.Add(UTF8_TO_TCHAR((*obj)[PATH].GetString()));
+		for (const rapidjson::Value* object : sorted) {
+			if (!object || !object->IsObject()) continue;
+			entities.Add(UTF8_TO_TCHAR((*object)[PATH].GetString()));
 		}
-		for (const rapidjson::Value* obj : sorted) {
-			if (!obj || !obj->IsObject()) continue;
-			if ((*obj).HasMember(CHILDREN) && (*obj)[CHILDREN].IsObject())
-				for (auto& child : (*obj)[CHILDREN].GetObject())
+		for (const rapidjson::Value* object : sorted) {
+			if (!object || !object->IsObject()) continue;
+			if ((*object).HasMember(CHILDREN) && (*object)[CHILDREN].IsObject())
+				for (auto& child : (*object)[CHILDREN].GetObject())
 					entities.Remove(UTF8_TO_TCHAR(child.value.GetString()));
-			if ((*obj).HasMember(INHERITS) && (*obj)[INHERITS].IsObject())
-				for (auto& inherit : (*obj)[INHERITS].GetObject())
+			if ((*object).HasMember(INHERITS) && (*object)[INHERITS].IsObject())
+				for (auto& inherit : (*object)[INHERITS].GetObject())
 					entities.Remove(UTF8_TO_TCHAR(inherit.value.GetString()));
 		}
 
 		FString result;
-		for (const rapidjson::Value* obj : sorted) {
-			if (!obj || !obj->IsObject()) continue;
+		for (const rapidjson::Value* object : sorted) {
+			if (!object || !object->IsObject()) continue;
 
-			FString path = UTF8_TO_TCHAR((*obj)[PATH].GetString());
+			FString path = UTF8_TO_TCHAR((*object)[PATH].GetString());
 			bool isPrefab = !entities.Contains(path);
+			FString owner = !isPrefab ? TEXT("\n\t") + GetOwner(*object) + TEXT("\n") : TEXT("");
 
-			result += FString::Printf(TEXT("%s%s.%s%s {\n%s%s}\n"),
+			result += FString::Printf(TEXT("%s%s.%s%s {\n%s%s%s}\n"),
 				isPrefab ? PREFAB : TEXT(""),
 				*IFC::Scope(),
 				*path,
-				*GetInheritances(*obj),
-				*GetAttributes(*obj),
-				*GetChildren(*obj, isPrefab));
+				*GetInheritances(*object),
+				*GetAttributes(*object),
+				*GetChildren(*object, isPrefab),
+				*owner);
 		}
 		return result;
 	}
 #pragma endregion
 
-	FString ParseLayers(const rapidjson::Value& header) {
-		FString layerName = FormatUUIDs(FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens));
-		FString result = FString::Printf(TEXT("%s.%s {\n"), *IFC::Scope(), *layerName);
+	TPair<FString, FString> ParseLayer(const rapidjson::Value& header) {
+		FString layerUUID = FormatUUIDs(FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens));
+		FString layerName = IFC::Scope() + "." + layerUUID;
+
+		FString result = FString::Printf(TEXT("%s {\n"), *layerName);
 
 		for (auto it = header.MemberBegin(); it != header.MemberEnd(); ++it) {
 			FString componentName = UTF8_TO_TCHAR(it->name.GetString());
 			componentName[0] = FChar::ToUpper(componentName[0]);
 			FString component = IFC::FormatName(componentName);
-
-			const auto& val = it->value;
-			FString value = IFC::FormatAttributeValue(val);
+			FString value = IFC::FormatAttributeValue(it->value);
 
 			result += FString::Printf(TEXT("\t%s: {%s}\n"), *component, *value);
 		}
-
 		result += TEXT("}\n");
-		return result;
+
+		return { layerName, result };
+	}
+
+	void InjectOwner(rapidjson::Value& object, const FString& owner, rapidjson::Document::AllocatorType& allocator) {
+		object.AddMember(rapidjson::Value(OWNER, allocator), rapidjson::Value(TCHAR_TO_UTF8(*owner), allocator), allocator);
 	}
 
 	void LoadIFCFiles(flecs::world& world, const TArray<FString>& paths) {
 		if (paths.Num() < 1) return;
 
-		rapidjson::Document::AllocatorType allocator;
 		rapidjson::Document tempDoc;
-		allocator = tempDoc.GetAllocator();
-
+		rapidjson::Document::AllocatorType& allocator = tempDoc.GetAllocator();
 		rapidjson::Value combinedData(rapidjson::kArrayType);
 		FString code;
 
@@ -546,19 +560,21 @@ namespace IFC {
 			}
 
 			if (!doc.HasMember(HEADER) || !doc[HEADER].IsObject()) {
-				UE_LOG(LogTemp, Warning, TEXT(">>> No valid header in file: %s"), *path);
+				UE_LOG(LogTemp, Warning, TEXT(">>> Invalid Header: %s"), *path);
 				continue;
 			}
-
-			code += ParseLayers(doc[HEADER]);
 
 			if (!doc.HasMember(DATA) || !doc[DATA].IsArray()) {
-				UE_LOG(LogTemp, Warning, TEXT(">>> No valid data array in file: %s"), *path);
+				UE_LOG(LogTemp, Warning, TEXT(">>> Invalid Data: %s"), *path);
 				continue;
 			}
 
-			for (const auto& entry : doc[DATA].GetArray()) {
-				rapidjson::Value copy(entry, allocator);
+			const auto& [layerName, layerCode] = ParseLayer(doc[HEADER]);
+			code += layerCode;
+
+			for (auto& entry : doc[DATA].GetArray()) {
+				Value copy(entry, allocator);
+				InjectOwner(copy, layerName, allocator);
 				combinedData.PushBack(copy, allocator);
 			}
 		}
