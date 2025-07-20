@@ -38,7 +38,7 @@ namespace IFC {
 		world.component<Author>().member<FString>(VALUE);
 		world.component<Timestamp>().member<FString>(VALUE);
 
-		world.component<Owner>().member<FString>(VALUE);
+		world.component<Owner>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 
 		world.component<bsi_ifc_presentation_diffuseColor>().member<FLinearColor>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<bsi_ifc_class>()
@@ -310,24 +310,19 @@ namespace IFC {
 #pragma endregion
 
 #pragma region Data
-	FString GetOwner(const Value& object) {
-		const FString ownerId = UTF8_TO_TCHAR(object[OWNER].GetString());
-		return FString::Printf(TEXT("%s: {\"%s\"}"), UTF8_TO_TCHAR(OWNER), *ownerId);
-	}
-
-	FString GetInheritances(const Value& object) {
-		if (!object.HasMember(INHERITS) || !object[INHERITS].IsObject())
-			return TEXT("");
-
+	FString GetInheritances(const Value& object, FString owner = "") {
 		const Value& inherits = object[INHERITS];
 		TArray<FString> inheritIDs;
 
-		for (auto itr = inherits.MemberBegin(); itr != inherits.MemberEnd(); ++itr) {
-			const Value& value = itr->value;
-			if (value.IsString()) {
-				inheritIDs.Add(UTF8_TO_TCHAR(value.GetString()));
+		if (!owner.IsEmpty())
+			inheritIDs.Add(owner);
+
+		if (object.HasMember(INHERITS) && !object[INHERITS].IsObject())
+			for (auto itr = inherits.MemberBegin(); itr != inherits.MemberEnd(); ++itr) {
+				const Value& value = itr->value;
+				if (value.IsString())
+					inheritIDs.Add(UTF8_TO_TCHAR(value.GetString()));
 			}
-		}
 
 		if (inheritIDs.Num() == 0)
 			return TEXT("");
@@ -339,7 +334,7 @@ namespace IFC {
 		if (!object.HasMember(CHILDREN) || !object[CHILDREN].IsObject())
 			return TEXT("");
 
-		const FString owner = GetOwner(object);
+		const FString owner = object[OWNER].GetString();
 		const Value& children = object[CHILDREN];
 		FString result;
 
@@ -350,7 +345,7 @@ namespace IFC {
 			if (value.IsString()) {
 				const FString inheritance = UTF8_TO_TCHAR(value.GetString());
 
-				result += FString::Printf(TEXT("\t%s%s: %s {%s}\n"),
+				result += FString::Printf(TEXT("\t%s%s: %s, %s {}\n"),
 					isPrefab ? PREFAB : TEXT(""),
 					*name,
 					*inheritance,
@@ -502,16 +497,17 @@ namespace IFC {
 
 			FString path = UTF8_TO_TCHAR((*object)[PATH].GetString());
 			bool isPrefab = !entities.Contains(path);
-			FString owner = !isPrefab ? TEXT("\n\t") + GetOwner(*object) + TEXT("\n") : TEXT("");
 
-			result += FString::Printf(TEXT("%s%s.%s%s {\n%s%s%s}\n"),
+			const rapidjson::Value& value = *object;
+			const FString owner = value[OWNER].GetString();
+
+			result += FString::Printf(TEXT("%s%s.%s%s {\n%s%s}\n"),
 				isPrefab ? PREFAB : TEXT(""),
 				*IFC::Scope(),
 				*path,
-				*GetInheritances(*object),
+				*GetInheritances(*object, isPrefab ? TEXT("") : *owner),
 				*GetAttributes(*object),
-				*GetChildren(*object, isPrefab),
-				*owner);
+				*GetChildren(*object, isPrefab));
 		}
 		return result;
 	}
@@ -533,7 +529,13 @@ namespace IFC {
 		}
 		result += TEXT("}\n");
 
-		return { layerName, result };
+		FString ownerPrefab = FString::Printf(TEXT("%s.%s%s"), *IFC::Scope(), UTF8_TO_TCHAR(OWNER), *layerUUID);
+		result += FString::Printf(TEXT("prefab %s {\n\t%s: {\"%s\"}\n}\n"),
+			*ownerPrefab,
+			UTF8_TO_TCHAR(OWNER),
+			*layerName);
+
+		return { ownerPrefab, result };
 	}
 
 	void InjectOwner(rapidjson::Value& object, const FString& owner, rapidjson::Document::AllocatorType& allocator) {
@@ -569,12 +571,12 @@ namespace IFC {
 				continue;
 			}
 
-			const auto& [layerName, layerCode] = ParseLayer(doc[HEADER]);
+			const auto& [owner, layerCode] = ParseLayer(doc[HEADER]);
 			code += layerCode;
 
 			for (auto& entry : doc[DATA].GetArray()) {
 				Value copy(entry, allocator);
-				InjectOwner(copy, layerName, allocator);
+				InjectOwner(copy, owner, allocator);
 				combinedData.PushBack(copy, allocator);
 			}
 		}
