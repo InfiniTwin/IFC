@@ -73,7 +73,7 @@ namespace IFC {
 	struct bsi_ifc_material { FString Code, Uri; };
 
 	// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/prop@v5a.ifcx
-	struct bsi_ifc_prop_IsExternal {};
+	struct bsi_ifc_prop_IsExternal { bool Value; };
 	struct bsi_ifc_prop_Volume { float Value; };
 	struct bsi_ifc_prop_Height { float Value; };
 	struct bsi_ifc_prop_Station { float Value; };

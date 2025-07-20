@@ -49,7 +49,7 @@ namespace IFC {
 			.member<FString>(MEMBER(bsi_ifc_material::Uri))
 			.add(flecs::OnInstantiate, flecs::Inherit);
 
-		world.component<bsi_ifc_prop_IsExternal>().add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<bsi_ifc_prop_IsExternal>().member<bool>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<bsi_ifc_prop_Volume>().member<float>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<bsi_ifc_prop_Height>().member<float>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<bsi_ifc_prop_Station>().member<float>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
@@ -244,12 +244,6 @@ namespace IFC {
 			// Enum attribute
 			if (enums[i]) {
 				result += FString::Printf(TEXT("\t(%s, %s)\n"), *name, UTF8_TO_TCHAR(attrValue.GetString()));
-				continue;
-			}
-
-			// Boolean true: print only name
-			if (attrValue.IsBool() && attrValue.GetBool() == true) {
-				result += FString::Printf(TEXT("\t%s\n"), *name);
 				continue;
 			}
 
