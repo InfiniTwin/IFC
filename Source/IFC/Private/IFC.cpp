@@ -43,7 +43,8 @@ namespace IFC {
 			.member<FString>(MEMBER(bsi_ifc_class::Code))
 			.member<FString>(MEMBER(bsi_ifc_class::Uri))
 			.add(flecs::OnInstantiate, flecs::Inherit);
-		world.component<bsi_ifc_spaceBoundary>().add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<bsi_ifc_spaceBoundary_relatedelement>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<bsi_ifc_spaceBoundary_relatingspace>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<bsi_ifc_material>()
 			.member<FString>(MEMBER(bsi_ifc_material::Code))
 			.member<FString>(MEMBER(bsi_ifc_material::Uri))
@@ -119,12 +120,16 @@ namespace IFC {
 		return !HasAttribute(ExcludeAtributesValues, attribute);
 	}
 
+	bool IsEnumAttribute(const FString& attribute) {
+		return HasAttribute(EnumAttributes, attribute);
+	}
+
 	bool IsVectorAttribute(const FString& attribute) {
 		return HasAttribute(VectorAttributes, attribute);
 	}
 
-	bool IsEnumAttribute(const FString& attribute) {
-		return HasAttribute(EnumAttributes, attribute);
+	bool IsRelationshipAttribute(const FString& attribute) {
+		return HasAttribute(RelationshipAttributes, attribute);
 	}
 
 	FString FormatName(const FString& fullName) {
@@ -136,58 +141,48 @@ namespace IFC {
 	}
 
 	FString FormatAttributeValue(const Value& val, bool isInnerArray = false) {
-		if (val.IsString()) {
+		if (val.IsString())
 			return FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(val.GetString())));
-		}
 		else if (val.IsNumber()) {
-			if (val.IsDouble() || val.IsFloat()) {
+			if (val.IsDouble() || val.IsFloat())
 				return FString::SanitizeFloat(val.GetDouble());
-			}
-			else if (val.IsInt64()) {
+			else if (val.IsInt64())
 				return FString::Printf(TEXT("%lld"), val.GetInt64());
-			}
-			else {
+			else
 				return FString::Printf(TEXT("%d"), val.GetInt());
-			}
 		}
-		else if (val.IsBool()) {
+		else if (val.IsBool())
 			return val.GetBool() ? TEXT("true") : TEXT("false");
-		}
 		else if (val.IsArray()) {
 			FString result;
 
-			if (isInnerArray) {
-				// Inner array: use double curly braces
+			if (isInnerArray) { // Inner array: use double curly braces				
 				result += TEXT("{{");
 				for (SizeType i = 0; i < val.Size(); ++i) {
-					if (i > 0) result += TEXT(", ");
+					if (i > 0)
+						result += TEXT(", ");
 					result += FormatAttributeValue(val[i]);
 				}
 				result += TEXT("}}");
 			}
-			else {
-				// Outer array: use square brackets
+			else { // Outer array: use square brackets				
 				result += TEXT("[");
 				for (SizeType i = 0; i < val.Size(); ++i) {
-					if (i > 0) result += TEXT(", ");
-					// If this element is an array, format it as inner array
-					if (val[i].IsArray()) {
+					if (i > 0)
+						result += TEXT(", ");
+					if (val[i].IsArray()) // If this element is an array, format it as inner array
 						result += FormatAttributeValue(val[i], true);
-					}
-					else {
+					else
 						result += FormatAttributeValue(val[i]);
-					}
 				}
 				result += TEXT("]");
 			}
 			return result;
 		}
-		else if (val.IsObject()) {
+		else if (val.IsObject())
 			return TEXT("\"{object}\"");
-		}
-		else {
+		else
 			return TEXT("\"UNKNOWN\"");
-		}
 	}
 
 	FString GetOpacity(const Value& attributes) {
@@ -203,8 +198,9 @@ namespace IFC {
 		const Value& attributes,
 		const TArray<FString>& names,
 		const TArray<bool>& includeValues,
+		const TArray<bool>& enums,
 		const TArray<bool>& vectors,
-		const TArray<bool>& enums) {
+		const TArray<bool>& relationships) {
 		FString result;
 
 		for (int32 i = 0; i < names.Num(); ++i) {
@@ -227,23 +223,36 @@ namespace IFC {
 				continue;
 			}
 
-			// Vector attribute
-			if (vectors[i]) {
+			if (enums[i]) { // Enum attribute
+				result += FString::Printf(TEXT("\t(%s, %s)\n"), *name, UTF8_TO_TCHAR(attrValue.GetString()));
+				continue;
+			}
+
+			if (vectors[i]) { // Vector attribute
 				result += FString::Printf(TEXT("\t%s: {{"), *name);
 				for (SizeType j = 0; j < attrValue.Size(); ++j) {
-					if (j > 0) result += TEXT(", ");
+					if (j > 0)
+						result += TEXT(", ");
 					result += FormatAttributeValue(attrValue[j]);
 				}
-				if (name.Equals(DIFFUSECOLOR_COMPONENT)) {
+				if (name.Equals(DIFFUSECOLOR_COMPONENT))
 					result += TEXT(", ") + GetOpacity(attributes);
-				}
+
 				result += TEXT("}}\n");
 				continue;
 			}
 
-			// Enum attribute
-			if (enums[i]) {
-				result += FString::Printf(TEXT("\t(%s, %s)\n"), *name, UTF8_TO_TCHAR(attrValue.GetString()));
+			if (relationships[i]) { // Relationship attribute
+				const Value& relObj = attrValue;
+				if (relObj.IsObject())
+					for (auto relIt = relObj.MemberBegin(); relIt != relObj.MemberEnd(); ++relIt) {
+						FString field = UTF8_TO_TCHAR(relIt->name.GetString());
+						if (relIt->value.IsObject() && relIt->value.HasMember("ref")) {
+							FString refId = UTF8_TO_TCHAR(relIt->value["ref"].GetString());
+							FString fullComponent = FString::Printf(TEXT("%s_%s"), *name, *FormatName(field));
+							result += FString::Printf(TEXT("\t%s: {\"%s\"}\n"), *fullComponent, *refId);
+						}
+					}
 				continue;
 			}
 
@@ -253,14 +262,14 @@ namespace IFC {
 			if (attrValue.IsObject()) {
 				bool first = true;
 				for (auto it = attrValue.MemberBegin(); it != attrValue.MemberEnd(); ++it) {
-					if (!first) result += TEXT(", ");
+					if (!first)
+						result += TEXT(", ");
 					first = false;
 					result += FormatAttributeValue(it->value);
 				}
 			}
-			else {
+			else
 				result += FormatAttributeValue(attrValue);
-			}
 
 			result += TEXT("}\n");
 		}
@@ -274,23 +283,26 @@ namespace IFC {
 
 		const Value& attributes = obj[ATTRIBUTES];
 		TArray<FString> names;
-		TArray<bool> vectors;
 		TArray<bool> enums;
+		TArray<bool> vectors;
+		TArray<bool> relationships;
 		TArray<bool> includeValues;
 
 		for (auto itr = attributes.MemberBegin(); itr != attributes.MemberEnd(); ++itr) {
 			FString attrName = UTF8_TO_TCHAR(itr->name.GetString());
-			bool isVector = IsVectorAttribute(attrName);
 			bool isEnum = IsEnumAttribute(attrName);
-			bool includeAttributeValues = CanIncludeAttributeValues(attrName) || isVector || isEnum;
+			bool isVector = IsVectorAttribute(attrName);
+			bool isRelationship = IsRelationshipAttribute(attrName);
+			bool includeAttributeValues = CanIncludeAttributeValues(attrName) || isEnum || isVector || isRelationship;
 
 			names.Add(attrName);
-			vectors.Add(isVector);
 			enums.Add(isEnum);
+			vectors.Add(isVector);
+			relationships.Add(isRelationship);
 			includeValues.Add(includeAttributeValues);
 		}
 
-		return ProcessAttributes(attributes, names, includeValues, vectors, enums);
+		return ProcessAttributes(attributes, names, includeValues, enums, vectors, relationships);
 	}
 
 #pragma endregion

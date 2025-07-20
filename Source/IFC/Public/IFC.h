@@ -33,18 +33,21 @@ namespace IFC {
 	};
 
 	static const TSet<FString> ExcludeAtributesValues = {
-		TEXT("bsi::ifc::spaceBoundary"),
 		TEXT("usd::usdgeom::mesh"),
 		TEXT("usd::xformop"),
 		TEXT("usd::usdgeom::basiscurves"),
+	};
+
+	static const TSet<FString> EnumAttributes = {
+		TEXT("bsi::ifc::prop::FireRating"),
 	};
 
 	static const TSet<FString> VectorAttributes = {
 		TEXT("bsi::ifc::presentation::diffuseColor"),
 	};
 
-	static const TSet<FString> EnumAttributes = {
-		TEXT("bsi::ifc::prop::FireRating"),
+	static const TSet<FString> RelationshipAttributes = {
+		TEXT("bsi::ifc::spaceBoundary"),
 	};
 
 	IFC_API void LoadIFCFiles(flecs::world& world, const TArray<FString>& paths);
@@ -69,7 +72,8 @@ namespace IFC {
 	// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
 	struct bsi_ifc_presentation_diffuseColor { FLinearColor Value; };
 	struct bsi_ifc_class { FString Code, Uri; };
-	struct bsi_ifc_spaceBoundary {};
+	struct bsi_ifc_spaceBoundary_relatedelement { FString Value; };
+	struct bsi_ifc_spaceBoundary_relatingspace { FString Value; };
 	struct bsi_ifc_material { FString Code, Uri; };
 
 	// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/prop@v5a.ifcx
