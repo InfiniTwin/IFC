@@ -20,6 +20,7 @@ namespace IFC {
 	constexpr const char* DATA = "data";
 	constexpr const char* PATH = "path";
 	constexpr const char* ATTRIBUTES = "attributes";
+	constexpr const char* ATTRIBUTE_VALUE = "value";
 	constexpr const char* INHERITS = "inherits";
 	constexpr const char* CHILDREN = "children";
 	constexpr const TCHAR* PREFAB = TEXT("prefab ");

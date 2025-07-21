@@ -7,6 +7,8 @@
 #include "rapidjson/document.h"
 #include "rapidjson/error/en.h"
 #include "Algo/TopologicalSort.h"
+#include "rapidjson/stringbuffer.h"
+#include "rapidjson/writer.h"
 
 #define LOCTEXT_NAMESPACE "FIFCModule"
 
@@ -104,6 +106,13 @@ namespace IFC {
 
 	using namespace rapidjson;
 
+	FString JsonValueToString(const rapidjson::Value& val) {
+		rapidjson::StringBuffer buffer;
+		rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+		val.Accept(writer);
+		return UTF8_TO_TCHAR(buffer.GetString());
+	}
+
 #pragma region Attributes
 
 	bool HasAttribute(const TSet<FString>& attributes, const FString& name) {
@@ -190,8 +199,14 @@ namespace IFC {
 	FString GetOpacity(const Value& attributes) {
 		for (auto itr = attributes.MemberBegin(); itr != attributes.MemberEnd(); ++itr) {
 			FString name = UTF8_TO_TCHAR(itr->name.GetString());
-			if (name.Equals(OPACITY_ATTRIBUTE))
-				return FormatAttributeValue(itr->value);
+			if (name.Equals(OPACITY_ATTRIBUTE)) {
+				const Value& attr = itr->value;
+
+				if (attr.IsObject() && attr.HasMember(ATTRIBUTE_VALUE))
+					return FormatAttributeValue(attr[ATTRIBUTE_VALUE]);
+				return 
+					FormatAttributeValue(attr);
+			}
 		}
 		return TEXT("1");
 	}
@@ -202,7 +217,8 @@ namespace IFC {
 		const TArray<bool>& includeValues,
 		const TArray<bool>& enums,
 		const TArray<bool>& vectors,
-		const TArray<bool>& relationships) {
+		const TArray<bool>& relationships)
+	{
 		FString result;
 
 		for (int32 i = 0; i < names.Num(); ++i) {
@@ -213,66 +229,79 @@ namespace IFC {
 			FTCHARToUTF8 utf8AttrName(*attrName);
 			const char* attrNameUtf8 = utf8AttrName.Get();
 			auto memberItr = attributes.FindMember(attrNameUtf8);
-
 			if (memberItr == attributes.MemberEnd())
 				continue;
 
 			const Value& attrValue = memberItr->value;
 			FString name = FormatName(attrName);
 
+			FString av = JsonValueToString(attrValue);
+
+			checkf(attrValue.IsObject(), TEXT("Attribute '%s' must be an object."), *name);
+			checkf(attrValue.HasMember(OWNER), TEXT("Attribute '%s' is missing 'Owner'."), *name);
+
+			const FString owner = UTF8_TO_TCHAR(attrValue[OWNER].GetString());
+			const_cast<Value&>(attrValue).RemoveMember(OWNER);
+
+			const Value& value = attrValue.HasMember(ATTRIBUTE_VALUE) ? attrValue[ATTRIBUTE_VALUE] : attrValue;
+
 			if (!includeValues[i]) {
-				result += FString::Printf(TEXT("\t%s\n"), *name);
+				result += FString::Printf(TEXT("\t(%s, %s)\n"), *owner, *name);
 				continue;
 			}
 
-			if (enums[i]) { // Enum attribute
-				result += FString::Printf(TEXT("\t(%s, %s)\n"), *name, UTF8_TO_TCHAR(attrValue.GetString()));
+			if (enums[i]) {
+				result += FString::Printf(TEXT("\t(%s, %s): {%s}\n"),
+					*owner,
+					*name,
+					UTF8_TO_TCHAR(value.GetString()));
 				continue;
 			}
 
-			if (vectors[i]) { // Vector attribute
-				result += FString::Printf(TEXT("\t%s: {{"), *name);
-				for (SizeType j = 0; j < attrValue.Size(); ++j) {
+			if (vectors[i]) {
+				result += FString::Printf(TEXT("\t(%s, %s): {{"), *owner, *name);
+				for (SizeType j = 0; j < value.Size(); ++j) {
 					if (j > 0)
 						result += TEXT(", ");
-					result += FormatAttributeValue(attrValue[j]);
+					result += FormatAttributeValue(value[j]);
 				}
 				if (name.Equals(DIFFUSECOLOR_COMPONENT))
 					result += TEXT(", ") + GetOpacity(attributes);
-
 				result += TEXT("}}\n");
 				continue;
 			}
 
-			if (relationships[i]) { // Relationship attribute
-				const Value& relObj = attrValue;
-				if (relObj.IsObject())
-					for (auto relIt = relObj.MemberBegin(); relIt != relObj.MemberEnd(); ++relIt) {
+			if (relationships[i]) {
+				if (value.IsObject()) {
+					for (auto relIt = value.MemberBegin(); relIt != value.MemberEnd(); ++relIt) {
 						FString field = UTF8_TO_TCHAR(relIt->name.GetString());
-						if (relIt->value.IsObject() && relIt->value.HasMember("ref")) {
-							FString refId = UTF8_TO_TCHAR(relIt->value["ref"].GetString());
-							FString fullComponent = FString::Printf(TEXT("%s_%s"), *name, *FormatName(field));
-							result += FString::Printf(TEXT("\t%s: {\"%s\"}\n"), *fullComponent, *refId);
+						if (relIt->value.IsObject() && relIt->value.MemberCount() > 0) {
+							auto inner = relIt->value.MemberBegin();
+							if (inner->value.IsString()) {
+								FString refId = UTF8_TO_TCHAR(inner->value.GetString());
+								FString fullComponent = FString::Printf(TEXT("%s_%s"), *name, *FormatName(field));
+								result += FString::Printf(TEXT("\t(%s, %s): {\"%s\"}\n"), *owner, *fullComponent, *refId);
+							}
 						}
 					}
+				}
 				continue;
 			}
 
-			// Default formatting
-			result += FString::Printf(TEXT("\t%s: {"), *name);
-
-			if (attrValue.IsObject()) {
+			// Default
+			result += FString::Printf(TEXT("\t(%s, %s): {"), *owner, *name);
+			if (value.IsObject()) {
 				bool first = true;
-				for (auto it = attrValue.MemberBegin(); it != attrValue.MemberEnd(); ++it) {
+				for (auto it = value.MemberBegin(); it != value.MemberEnd(); ++it) {
 					if (!first)
 						result += TEXT(", ");
 					first = false;
 					result += FormatAttributeValue(it->value);
 				}
 			}
-			else
-				result += FormatAttributeValue(attrValue);
-
+			else {
+				result += FormatAttributeValue(value);
+			}
 			result += TEXT("}\n");
 		}
 
@@ -513,11 +542,11 @@ namespace IFC {
 	}
 #pragma endregion
 
-	TPair<FString, FString> ParseLayer(const rapidjson::Value& header) {
+	TTuple<FString, FString, FString> ParseLayer(const rapidjson::Value& header) {
 		FString layerUUID = FormatUUIDs(FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens));
-		FString layerName = IFC::Scope() + "." + layerUUID;
+		FString layer = IFC::Scope() + "." + layerUUID;
 
-		FString result = FString::Printf(TEXT("%s {\n"), *layerName);
+		FString result = FString::Printf(TEXT("%s {\n"), *layer);
 
 		for (auto it = header.MemberBegin(); it != header.MemberEnd(); ++it) {
 			FString componentName = UTF8_TO_TCHAR(it->name.GetString());
@@ -529,16 +558,36 @@ namespace IFC {
 		}
 		result += TEXT("}\n");
 
-		FString ownerPrefab = FString::Printf(TEXT("%s.%s%s"), *IFC::Scope(), UTF8_TO_TCHAR(OWNER), *layerUUID);
+		FString owner = FString::Printf(TEXT("%s.%s%s"), *IFC::Scope(), UTF8_TO_TCHAR(OWNER), *layerUUID);
 		result += FString::Printf(TEXT("prefab %s {\n\t%s: {\"%s\"}\n}\n"),
-			*ownerPrefab,
+			*owner,
 			UTF8_TO_TCHAR(OWNER),
-			*layerName);
+			*layer);
 
-		return { ownerPrefab, result };
+		return { result, layer, owner };
 	}
 
-	void InjectOwner(rapidjson::Value& object, const FString& owner, rapidjson::Document::AllocatorType& allocator) {
+	void InjectOwner(rapidjson::Value& object, const FString& layer, const FString& owner, rapidjson::Document::AllocatorType& allocator) {
+		using namespace rapidjson;
+
+		Value layerValue(TCHAR_TO_UTF8(*layer), allocator);
+		if (object.HasMember(ATTRIBUTES) && object[ATTRIBUTES].IsObject()) {
+			Value& attributes = object[ATTRIBUTES];
+			for (auto it = attributes.MemberBegin(); it != attributes.MemberEnd(); ++it) {
+				Value& val = it->value;
+
+				// Wrap non-objects
+				if (!val.IsObject()) {
+					Value wrapped(kObjectType);
+					wrapped.AddMember(Value(ATTRIBUTE_VALUE, allocator), val, allocator);
+					val = wrapped;
+				}
+
+				val.AddMember(Value(OWNER, allocator), layerValue, allocator);
+			}
+			return;
+		}
+
 		object.AddMember(rapidjson::Value(OWNER, allocator), rapidjson::Value(TCHAR_TO_UTF8(*owner), allocator), allocator);
 	}
 
@@ -571,12 +620,12 @@ namespace IFC {
 				continue;
 			}
 
-			const auto& [owner, layerCode] = ParseLayer(doc[HEADER]);
-			code += layerCode;
+			auto layerData = ParseLayer(doc[HEADER]);
+			code += layerData.Get<0>();
 
 			for (auto& entry : doc[DATA].GetArray()) {
-				Value copy(entry, allocator);
-				InjectOwner(copy, owner, allocator);
+				rapidjson::Value copy(entry, allocator);
+				InjectOwner(copy, layerData.Get<1>(), layerData.Get<2>(), allocator);
 				combinedData.PushBack(copy, allocator);
 			}
 		}
