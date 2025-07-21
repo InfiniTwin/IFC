@@ -116,10 +116,9 @@ namespace IFC {
 #pragma region Attributes
 
 	bool HasAttribute(const TSet<FString>& attributes, const FString& name) {
-		for (const FString& attribute : attributes) {
-			if (name == attribute)
+		for (const FString& attribute : attributes)
+			if (name.Contains(attribute))
 				return true;
-		}
 		return false;
 	}
 
@@ -199,14 +198,8 @@ namespace IFC {
 	FString GetOpacity(const Value& attributes) {
 		for (auto itr = attributes.MemberBegin(); itr != attributes.MemberEnd(); ++itr) {
 			FString name = UTF8_TO_TCHAR(itr->name.GetString());
-			if (name.Equals(OPACITY_ATTRIBUTE)) {
-				const Value& attr = itr->value;
-
-				if (attr.IsObject() && attr.HasMember(ATTRIBUTE_VALUE))
-					return FormatAttributeValue(attr[ATTRIBUTE_VALUE]);
-				return 
-					FormatAttributeValue(attr);
-			}
+			if (name.Contains(OPACITY_ATTRIBUTE))
+				return FormatAttributeValue(itr->value);
 		}
 		return TEXT("1");
 	}
@@ -222,28 +215,25 @@ namespace IFC {
 		FString result;
 
 		for (int32 i = 0; i < names.Num(); ++i) {
-			const FString& attrName = names[i];
-			if (ExcludeAttribute(attrName))
+			const FString& fullAttrName = names[i];
+			if (ExcludeAttribute(fullAttrName))
 				continue;
 
-			FTCHARToUTF8 utf8AttrName(*attrName);
+			FString owner, attrName;
+			if (!fullAttrName.Split(ATTRIBUTE_SEPARATOR, &owner, &attrName)) {
+				attrName = fullAttrName;
+				owner = TEXT("Unknown");
+			}
+
+			FTCHARToUTF8 utf8AttrName(*fullAttrName);
 			const char* attrNameUtf8 = utf8AttrName.Get();
 			auto memberItr = attributes.FindMember(attrNameUtf8);
+
 			if (memberItr == attributes.MemberEnd())
 				continue;
 
 			const Value& attrValue = memberItr->value;
 			FString name = FormatName(attrName);
-
-			FString av = JsonValueToString(attrValue);
-
-			checkf(attrValue.IsObject(), TEXT("Attribute '%s' must be an object."), *name);
-			checkf(attrValue.HasMember(OWNER), TEXT("Attribute '%s' is missing 'Owner'."), *name);
-
-			const FString owner = UTF8_TO_TCHAR(attrValue[OWNER].GetString());
-			const_cast<Value&>(attrValue).RemoveMember(OWNER);
-
-			const Value& value = attrValue.HasMember(ATTRIBUTE_VALUE) ? attrValue[ATTRIBUTE_VALUE] : attrValue;
 
 			if (!includeValues[i]) {
 				result += FString::Printf(TEXT("\t(%s, %s)\n"), *owner, *name);
@@ -251,19 +241,16 @@ namespace IFC {
 			}
 
 			if (enums[i]) {
-				result += FString::Printf(TEXT("\t(%s, %s): {%s}\n"),
-					*owner,
-					*name,
-					UTF8_TO_TCHAR(value.GetString()));
+				result += FString::Printf(TEXT("\t(%s, %s): {%s}\n"), *owner, *name, UTF8_TO_TCHAR(attrValue.GetString()));
 				continue;
 			}
 
 			if (vectors[i]) {
 				result += FString::Printf(TEXT("\t(%s, %s): {{"), *owner, *name);
-				for (SizeType j = 0; j < value.Size(); ++j) {
+				for (SizeType j = 0; j < attrValue.Size(); ++j) {
 					if (j > 0)
 						result += TEXT(", ");
-					result += FormatAttributeValue(value[j]);
+					result += FormatAttributeValue(attrValue[j]);
 				}
 				if (name.Equals(DIFFUSECOLOR_COMPONENT))
 					result += TEXT(", ") + GetOpacity(attributes);
@@ -272,16 +259,14 @@ namespace IFC {
 			}
 
 			if (relationships[i]) {
-				if (value.IsObject()) {
-					for (auto relIt = value.MemberBegin(); relIt != value.MemberEnd(); ++relIt) {
+				const Value& relObj = attrValue;
+				if (relObj.IsObject()) {
+					for (auto relIt = relObj.MemberBegin(); relIt != relObj.MemberEnd(); ++relIt) {
 						FString field = UTF8_TO_TCHAR(relIt->name.GetString());
-						if (relIt->value.IsObject() && relIt->value.MemberCount() > 0) {
-							auto inner = relIt->value.MemberBegin();
-							if (inner->value.IsString()) {
-								FString refId = UTF8_TO_TCHAR(inner->value.GetString());
-								FString fullComponent = FString::Printf(TEXT("%s_%s"), *name, *FormatName(field));
-								result += FString::Printf(TEXT("\t(%s, %s): {\"%s\"}\n"), *owner, *fullComponent, *refId);
-							}
+						if (relIt->value.IsObject() && relIt->value.HasMember("ref")) {
+							FString refId = UTF8_TO_TCHAR(relIt->value["ref"].GetString());
+							FString fullComponent = FString::Printf(TEXT("%s_%s"), *name, *FormatName(field));
+							result += FString::Printf(TEXT("\t(%s, %s): {\"%s\"}\n"), *owner, *fullComponent, *refId);
 						}
 					}
 				}
@@ -290,9 +275,10 @@ namespace IFC {
 
 			// Default
 			result += FString::Printf(TEXT("\t(%s, %s): {"), *owner, *name);
-			if (value.IsObject()) {
+
+			if (attrValue.IsObject()) {
 				bool first = true;
-				for (auto it = value.MemberBegin(); it != value.MemberEnd(); ++it) {
+				for (auto it = attrValue.MemberBegin(); it != attrValue.MemberEnd(); ++it) {
 					if (!first)
 						result += TEXT(", ");
 					first = false;
@@ -300,8 +286,9 @@ namespace IFC {
 				}
 			}
 			else {
-				result += FormatAttributeValue(value);
+				result += FormatAttributeValue(attrValue);
 			}
+
 			result += TEXT("}\n");
 		}
 
@@ -568,27 +555,30 @@ namespace IFC {
 	}
 
 	void InjectOwner(rapidjson::Value& object, const FString& layer, const FString& owner, rapidjson::Document::AllocatorType& allocator) {
-		using namespace rapidjson;
 
-		Value layerValue(TCHAR_TO_UTF8(*layer), allocator);
-		if (object.HasMember(ATTRIBUTES) && object[ATTRIBUTES].IsObject()) {
-			Value& attributes = object[ATTRIBUTES];
-			for (auto it = attributes.MemberBegin(); it != attributes.MemberEnd(); ++it) {
-				Value& val = it->value;
-
-				// Wrap non-objects
-				if (!val.IsObject()) {
-					Value wrapped(kObjectType);
-					wrapped.AddMember(Value(ATTRIBUTE_VALUE, allocator), val, allocator);
-					val = wrapped;
-				}
-
-				val.AddMember(Value(OWNER, allocator), layerValue, allocator);
-			}
+		if (!object.HasMember(ATTRIBUTES) || !object[ATTRIBUTES].IsObject())
+		{
+			object.AddMember(rapidjson::Value(OWNER, allocator),
+				rapidjson::Value(TCHAR_TO_UTF8(*owner), allocator), 
+				allocator);
 			return;
 		}
 
-		object.AddMember(rapidjson::Value(OWNER, allocator), rapidjson::Value(TCHAR_TO_UTF8(*owner), allocator), allocator);
+		Value& attributes = object[ATTRIBUTES];
+		TArray<Value> keys;
+		TArray<Value> values;
+
+		for (auto it = attributes.MemberBegin(); it != attributes.MemberEnd(); ++it) {
+			const FString originalKey = UTF8_TO_TCHAR(it->name.GetString());
+			const FString prefixedKey = layer + ATTRIBUTE_SEPARATOR + originalKey;
+			keys.Add(Value(TCHAR_TO_UTF8(*prefixedKey), allocator));
+			values.Add(Value(it->value, allocator));
+		}
+
+		attributes.RemoveAllMembers();
+
+		for (int32 i = 0; i < keys.Num(); ++i)
+			attributes.AddMember(MoveTemp(keys[i]), MoveTemp(values[i]), allocator);
 	}
 
 	void LoadIFCFiles(flecs::world& world, const TArray<FString>& paths) {
