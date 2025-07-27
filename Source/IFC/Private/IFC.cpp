@@ -535,6 +535,8 @@ namespace IFC {
 
 		FString result = FString::Printf(TEXT("%s {\n"), *layer);
 
+		result += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Layer)));
+
 		for (auto it = header.MemberBegin(); it != header.MemberEnd(); ++it) {
 			FString componentName = UTF8_TO_TCHAR(it->name.GetString());
 			componentName[0] = FChar::ToUpper(componentName[0]);

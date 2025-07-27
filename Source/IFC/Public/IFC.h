@@ -61,11 +61,6 @@ namespace IFC {
 
 	IFC_API void Register(flecs::world& world);
 
-	inline constexpr TCHAR SelectIfcDialogTitle[] = TEXT("IT::LoadIfcDialogTitle");
-	inline constexpr TCHAR SelectIfcDialogFileType[] = TEXT("IFC 5 (*.ifcx)|*.ifcx");
-
-	using namespace ECS;
-
 	struct Layer {};
 	struct Id { FString Value; };
 	struct Version { FString Value; };
