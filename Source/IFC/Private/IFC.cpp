@@ -35,6 +35,7 @@ namespace IFC {
 		using namespace ECS;
 
 		world.component<Layer>();
+		world.component<Path>().member<FString>(VALUE);
 		world.component<Id>().member<FString>(VALUE);
 		world.component<Version>().member<FString>(VALUE);
 		world.component<Author>().member<FString>(VALUE);
@@ -521,13 +522,14 @@ namespace IFC {
 	}
 #pragma endregion
 
-	TTuple<FString, FString, FString> ParseLayer(const rapidjson::Value& header) {
+	TTuple<FString, FString, FString> ParseLayer(const rapidjson::Value& header, const FString path) {
 		FString layerUUID = FormatUUIDs(FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens));
 		FString layer = IFC::Scope() + "." + layerUUID;
 
 		FString result = FString::Printf(TEXT("%s {\n"), *layer);
 
 		result += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Layer)));
+		result += FString::Printf(TEXT("\t%s: {\"%s\"}\n"), UTF8_TO_TCHAR(COMPONENT(Path)), *path);
 
 		for (auto it = header.MemberBegin(); it != header.MemberEnd(); ++it) {
 			FString componentName = UTF8_TO_TCHAR(it->name.GetString());
@@ -604,7 +606,7 @@ namespace IFC {
 				continue;
 			}
 
-			auto layerData = ParseLayer(doc[HEADER]);
+			auto layerData = ParseLayer(doc[HEADER], path);
 			code += layerData.Get<0>();
 
 			for (auto& entry : doc[DATA].GetArray()) {
