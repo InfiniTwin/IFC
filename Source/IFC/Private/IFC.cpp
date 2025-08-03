@@ -378,9 +378,9 @@ namespace IFC {
 
 		// Step 1: Build object map and empty dependency list
 		for (auto& entry : dataArray.GetArray()) {
-			if (!entry.HasMember(PATH) || !entry[PATH].IsString()) {
+			if (!entry.HasMember(PATH) || !entry[PATH].IsString())
 				continue;
-			}
+
 			FString id = UTF8_TO_TCHAR(entry[PATH].GetString());
 			objectMap.Add(id, &entry);
 			dependencies.Add(id, {});
@@ -388,29 +388,24 @@ namespace IFC {
 
 		// Step 2: Fill in dependencies
 		for (auto& entry : dataArray.GetArray()) {
-			if (!entry.HasMember(PATH) || !entry[PATH].IsString()) {
+			if (!entry.HasMember(PATH) || !entry[PATH].IsString())
 				continue;
-			}
 
 			FString id = UTF8_TO_TCHAR(entry[PATH].GetString());
 
-			if (entry.HasMember(CHILDREN) && entry[CHILDREN].IsObject()) {
+			if (entry.HasMember(CHILDREN) && entry[CHILDREN].IsObject())
 				for (auto& child : entry[CHILDREN].GetObject()) {
 					FString childId = UTF8_TO_TCHAR(child.value.GetString());
-					if (dependencies.Contains(id)) {
+					if (dependencies.Contains(id))
 						dependencies[id].Add(childId); // id depends on child
-					}
 				}
-			}
 
-			if (entry.HasMember(INHERITS) && entry[INHERITS].IsObject()) {
+			if (entry.HasMember(INHERITS) && entry[INHERITS].IsObject())
 				for (auto& inherit : entry[INHERITS].GetObject()) {
 					FString baseId = UTF8_TO_TCHAR(inherit.value.GetString());
-					if (dependencies.Contains(id)) {
+					if (dependencies.Contains(id))
 						dependencies[id].Add(baseId); // id depends on base
-					}
 				}
-			}
 		}
 
 		// Step 3: List of all UUIDs to sort
@@ -422,17 +417,14 @@ namespace IFC {
 			return dependencies[id]; // id depends on these
 			});
 
-		if (!success) {
-			UE_LOG(LogTemp, Warning, TEXT("Cyclic dependency detected in prefab graph."));
-		}
+		if (!success)
+			UE_LOG(LogTemp, Warning, TEXT(">>> Cyclic dependency detected in prefab graph."));
 
 		// Step 5: Convert back to JSON pointers
 		TArray<const rapidjson::Value*> sortedObjects;
-		for (const FString& id : sortedIds) {
-			if (const rapidjson::Value** value = objectMap.Find(id)) {
+		for (const FString& id : sortedIds)
+			if (const rapidjson::Value** value = objectMap.Find(id))
 				sortedObjects.Add(*value);
-			}
-		}
 
 		return sortedObjects;
 	}
