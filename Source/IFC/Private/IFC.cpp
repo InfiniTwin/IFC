@@ -1,14 +1,11 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "IFC.h"
+#include "IFCLayer.h"
 #include "Assets.h"
 #include "ECS.h"
 #include "Containers/Map.h"
-#include "rapidjson/document.h"
-#include "rapidjson/error/en.h"
 #include "Algo/TopologicalSort.h"
-#include "rapidjson/stringbuffer.h"
-#include "rapidjson/writer.h"
 
 #define LOCTEXT_NAMESPACE "FIFCModule"
 
@@ -32,17 +29,9 @@ namespace IFC {
 	}
 
 	void Register(flecs::world& world) {
+		IFCLayer::RegisterComponents(world);
+
 		using namespace ECS;
-
-		world.component<Layer>();
-		world.component<Path>().member<FString>(VALUE);
-		world.component<Id>().member<FString>(VALUE);
-		world.component<Version>().member<FString>(VALUE);
-		world.component<Author>().member<FString>(VALUE);
-		world.component<Timestamp>().member<FString>(VALUE);
-
-		world.component<Owner>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
-
 		world.component<bsi_ifc_presentation_diffuseColor>().member<FLinearColor>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<bsi_ifc_class>()
 			.member<FString>(MEMBER(bsi_ifc_class::Code))
@@ -88,7 +77,7 @@ namespace IFC {
 			.add(flecs::OnInstantiate, flecs::Inherit);
 	}
 
-	FString FormatUUIDs(const FString& input) {
+	FString FormatUUID(const FString& input) {
 		FString output = input;
 
 		// Match UUIDs in the form xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
@@ -103,6 +92,13 @@ namespace IFC {
 		}
 
 		return output;
+	}
+
+	FString FormatName(const FString& fullName) {
+		FString formatted = fullName;
+		for (const FString& symbol : { TEXT("::"), TEXT("-") })
+			formatted = formatted.Replace(*symbol, TEXT("_"));
+		return formatted;
 	}
 
 	using namespace rapidjson;
@@ -143,15 +139,7 @@ namespace IFC {
 		return HasAttribute(RelationshipAttributes, attribute);
 	}
 
-	FString FormatName(const FString& fullName) {
-		FString formatted = fullName;
-		for (const FString& symbol : { TEXT("::"), TEXT("-") }) {
-			formatted = formatted.Replace(*symbol, TEXT("_"));
-		}
-		return formatted;
-	}
-
-	FString FormatAttributeValue(const Value& value, bool isInnerArray = false) {
+	FString FormatAttributeValue(const Value& value, bool isInnerArray) {
 		if (value.IsString())
 			return FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(value.GetString())));
 		else if (value.IsNumber()) {
@@ -522,40 +510,10 @@ namespace IFC {
 	}
 #pragma endregion
 
-	TTuple<FString, FString, FString> ParseLayer(const rapidjson::Value& header, const FString path) {
-		FString layerUUID = FormatUUIDs(FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens));
-		FString layer = IFC::Scope() + "." + layerUUID;
-
-		FString result = FString::Printf(TEXT("%s {\n"), *layer);
-
-		result += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Layer)));
-		result += FString::Printf(TEXT("\t%s: {\"%s\"}\n"), UTF8_TO_TCHAR(COMPONENT(Path)), *path);
-
-		for (auto it = header.MemberBegin(); it != header.MemberEnd(); ++it) {
-			FString componentName = UTF8_TO_TCHAR(it->name.GetString());
-			componentName[0] = FChar::ToUpper(componentName[0]);
-			FString component = IFC::FormatName(componentName);
-			FString value = IFC::FormatAttributeValue(it->value);
-
-			result += FString::Printf(TEXT("\t%s: {%s}\n"), *component, *value);
-		}
-		result += TEXT("}\n");
-
-		FString owner = FString::Printf(TEXT("%s.%s%s"), *IFC::Scope(), UTF8_TO_TCHAR(OWNER), *layerUUID);
-		result += FString::Printf(TEXT("prefab %s {\n\t%s: {\"%s\"}\n}\n"),
-			*owner,
-			UTF8_TO_TCHAR(OWNER),
-			*layer);
-
-		return { result, layer, owner };
-	}
-
-	void InjectOwner(rapidjson::Value& object, const FString& layer, const FString& owner, rapidjson::Document::AllocatorType& allocator) {
-
-		if (!object.HasMember(ATTRIBUTES) || !object[ATTRIBUTES].IsObject())
-		{
+	void InjectOwner(rapidjson::Value& object, const FString& layerPath, rapidjson::Document::AllocatorType& allocator) {
+		if (!object.HasMember(ATTRIBUTES) || !object[ATTRIBUTES].IsObject()) {
 			object.AddMember(rapidjson::Value(OWNER, allocator),
-				rapidjson::Value(TCHAR_TO_UTF8(*owner), allocator), 
+				rapidjson::Value(TCHAR_TO_UTF8(*GetOwnerPath(layerPath)), allocator),
 				allocator);
 			return;
 		}
@@ -566,7 +524,7 @@ namespace IFC {
 
 		for (auto it = attributes.MemberBegin(); it != attributes.MemberEnd(); ++it) {
 			const FString originalKey = UTF8_TO_TCHAR(it->name.GetString());
-			const FString prefixedKey = layer + ATTRIBUTE_SEPARATOR + originalKey;
+			const FString prefixedKey = layerPath + ATTRIBUTE_SEPARATOR + originalKey;
 			keys.Add(Value(TCHAR_TO_UTF8(*prefixedKey), allocator));
 			values.Add(Value(it->value, allocator));
 		}
@@ -577,47 +535,46 @@ namespace IFC {
 			attributes.AddMember(MoveTemp(keys[i]), MoveTemp(values[i]), allocator);
 	}
 
-	void LoadIFCFiles(flecs::world& world, const TArray<FString>& paths) {
-		if (paths.Num() < 1) return;
-
+	void LoadIFCData(flecs::world& world, const TArray<flecs::entity> layers) {
 		rapidjson::Document tempDoc;
 		rapidjson::Document::AllocatorType& allocator = tempDoc.GetAllocator();
 		rapidjson::Value combinedData(rapidjson::kArrayType);
 		FString code;
 
-		for (const FString& path : paths) {
-			auto jsonString = Assets::LoadTextFile(path);
-			auto formatted = FormatUUIDs(jsonString);
+		FString layerNames;
+
+		for (const flecs::entity layer : layers) {
+			FString filePath = layer.try_get<Path>()->Value;
+			auto jsonString = Assets::LoadTextFile(filePath);
+			auto formatted = FormatUUID(jsonString);
 			free(jsonString);
 
 			rapidjson::Document doc;
 			if (doc.Parse(TCHAR_TO_UTF8(*formatted)).HasParseError()) {
-				UE_LOG(LogTemp, Error, TEXT(">>> Parse error in file %s: %s"), *path, *FString(GetParseError_En(doc.GetParseError())));
+				UE_LOG(LogTemp, Error, TEXT(">>> Parse error in file %s: %s"), *filePath, *FString(GetParseError_En(doc.GetParseError())));
 				continue;
 			}
 
 			if (!doc.HasMember(HEADER) || !doc[HEADER].IsObject()) {
-				UE_LOG(LogTemp, Warning, TEXT(">>> Invalid Header: %s"), *path);
+				UE_LOG(LogTemp, Warning, TEXT(">>> Invalid Header: %s"), *filePath);
 				continue;
 			}
 
 			if (!doc.HasMember(DATA) || !doc[DATA].IsArray()) {
-				UE_LOG(LogTemp, Warning, TEXT(">>> Invalid Data: %s"), *path);
+				UE_LOG(LogTemp, Warning, TEXT(">>> Invalid Data: %s"), *filePath);
 				continue;
 			}
 
-			auto layerData = ParseLayer(doc[HEADER], path);
-			code += layerData.Get<0>();
-
 			for (auto& entry : doc[DATA].GetArray()) {
 				rapidjson::Value copy(entry, allocator);
-				InjectOwner(copy, layerData.Get<1>(), layerData.Get<2>(), allocator);
+				InjectOwner(copy, ECS::NormalizedPath(layer.path().c_str()), allocator);
 				combinedData.PushBack(copy, allocator);
 			}
+
+			layerNames += layer.try_get<Id>()->Value + " | ";
 		}
 
 		code += ParseData(combinedData, allocator);
-		UE_LOG(LogTemp, Log, TEXT(">>> IFC:\n%s"), *code);
-		ECS::RunCode(world, paths[0], code);
+		ECS::RunCode(world, layerNames, code);
 	}
 }

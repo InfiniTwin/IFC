@@ -5,6 +5,10 @@
 #include "Modules/ModuleManager.h"
 #include "ECS.h"
 #include <flecs.h>
+#include "rapidjson/document.h"
+#include "rapidjson/error/en.h"
+#include "rapidjson/stringbuffer.h"
+#include "rapidjson/writer.h"
 
 class FIFCModule : public IModuleInterface {
 public:
@@ -16,7 +20,6 @@ public:
 
 namespace IFC {
 #pragma region IFC
-	constexpr const char* HEADER = "header";
 	constexpr const char* DATA = "data";
 	constexpr const char* PATH = "path";
 	constexpr const char* ATTRIBUTES = "attributes";
@@ -24,8 +27,6 @@ namespace IFC {
 	constexpr const char* INHERITS = "inherits";
 	constexpr const char* CHILDREN = "children";
 	constexpr const TCHAR* PREFAB = TEXT("prefab ");
-
-	constexpr const char* OWNER = COMPONENT(Owner);
 
 	constexpr const char* DIFFUSECOLOR_COMPONENT = "bsi_ifc_presentation_diffuseColor";
 	constexpr const char* OPACITY_ATTRIBUTE = "bsi::ifc::presentation::opacity";
@@ -53,22 +54,19 @@ namespace IFC {
 		TEXT("bsi::ifc::spaceBoundary"),
 	};
 
-	IFC_API void LoadIFCFiles(flecs::world& world, const TArray<FString>& paths);
+	using namespace rapidjson;
+
+	FString FormatUUID(const FString& input);
+	FString FormatName(const FString& fullName);
+	FString FormatAttributeValue(const Value& value, bool isInnerArray = false);
+
+	IFC_API void LoadIFCData(flecs::world& world, const TArray<flecs::entity> layers);
 #pragma endregion
 
 #pragma region Flecs
 	IFC_API FString& Scope();
 
 	IFC_API void Register(flecs::world& world);
-
-	struct Layer {};
-	struct Path { FString Value; };
-	struct Id { FString Value; };
-	struct Version { FString Value; };
-	struct Author { FString Value; };
-	struct Timestamp { FString Value; };
-
-	struct Owner { FString Value; };
 
 	// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
 	struct bsi_ifc_presentation_diffuseColor { FLinearColor Value; };
