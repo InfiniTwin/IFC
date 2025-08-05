@@ -7,7 +7,7 @@
 #include <flecs.h>
 
 namespace IFC {
-	struct IFCLayer{
+	struct LayerFeature{
 		static void RegisterComponents(flecs::world& world);
 	};
 

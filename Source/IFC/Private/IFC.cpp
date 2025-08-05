@@ -1,7 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "IFC.h"
-#include "IFCLayer.h"
+#include "LayerFeature.h"
 #include "Assets.h"
 #include "ECS.h"
 #include "Containers/Map.h"
@@ -29,7 +29,7 @@ namespace IFC {
 	}
 
 	void Register(flecs::world& world) {
-		IFCLayer::RegisterComponents(world);
+		LayerFeature::RegisterComponents(world);
 
 		using namespace ECS;
 		world.component<bsi_ifc_presentation_diffuseColor>().member<FLinearColor>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);

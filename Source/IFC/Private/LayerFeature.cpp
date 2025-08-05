@@ -1,6 +1,6 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
-#include "IFCLayer.h"
+#include "LayerFeature.h"
 #include "IFC.h"
 #include "Assets.h"
 #include "ECS.h"
@@ -9,7 +9,7 @@
 #include "rapidjson/writer.h"
 
 namespace IFC {
-	void IFCLayer::RegisterComponents(flecs::world& world) {
+	void LayerFeature::RegisterComponents(flecs::world& world) {
 		using namespace ECS;
 		world.component<Layer>();
 		world.component<Path>().member<FString>(VALUE);
