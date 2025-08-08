@@ -68,6 +68,9 @@ namespace IFC {
 
 	IFC_API void Register(flecs::world& world);
 
+	struct IFCData {};
+	struct QueryIFCData { flecs::query<IFCData> Value; };
+
 	// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
 	struct bsi_ifc_presentation_diffuseColor { FLinearColor Value; };
 	struct bsi_ifc_class { FString Code, Uri; };

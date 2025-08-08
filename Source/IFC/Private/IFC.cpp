@@ -32,6 +32,14 @@ namespace IFC {
 		LayerFeature::RegisterComponents(world);
 
 		using namespace ECS;
+
+		world.component<IFCData>();
+		world.component<QueryIFCData>();
+		world.set(QueryIFCData{
+			world.query_builder<IFCData>(COMPONENT(QueryIFCData))
+			.with(flecs::Prefab).optional()
+			.cached().build() });
+
 		world.component<bsi_ifc_presentation_diffuseColor>().member<FLinearColor>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<bsi_ifc_class>()
 			.member<FString>(MEMBER(bsi_ifc_class::Code))
@@ -205,8 +213,7 @@ namespace IFC {
 
 		for (int32 i = 0; i < names.Num(); ++i) {
 			const FString& fullAttrName = names[i];
-			if (ExcludeAttribute(fullAttrName))
-				continue;
+			if (ExcludeAttribute(fullAttrName)) continue;
 
 			FString owner, attrName;
 			if (!fullAttrName.Split(ATTRIBUTE_SEPARATOR, &owner, &attrName)) {
@@ -218,8 +225,7 @@ namespace IFC {
 			const char* attrNameUtf8 = utf8AttrName.Get();
 			auto memberItr = attributes.FindMember(attrNameUtf8);
 
-			if (memberItr == attributes.MemberEnd())
-				continue;
+			if (memberItr == attributes.MemberEnd()) continue;
 
 			const Value& attrValue = memberItr->value;
 			FString name = FormatName(attrName);
@@ -249,7 +255,7 @@ namespace IFC {
 
 			if (relationships[i]) {
 				const Value& relObj = attrValue;
-				if (relObj.IsObject()) {
+				if (relObj.IsObject())
 					for (auto relIt = relObj.MemberBegin(); relIt != relObj.MemberEnd(); ++relIt) {
 						FString field = UTF8_TO_TCHAR(relIt->name.GetString());
 						if (relIt->value.IsObject() && relIt->value.HasMember("ref")) {
@@ -258,11 +264,9 @@ namespace IFC {
 							result += FString::Printf(TEXT("\t(%s, %s): {\"%s\"}\n"), *owner, *fullComponent, *refId);
 						}
 					}
-				}
 				continue;
 			}
 
-			// Default
 			result += FString::Printf(TEXT("\t(%s, %s): {"), *owner, *name);
 
 			if (attrValue.IsObject()) {
@@ -274,9 +278,8 @@ namespace IFC {
 					result += FormatAttributeValue(it->value);
 				}
 			}
-			else {
+			else
 				result += FormatAttributeValue(attrValue);
-			}
 
 			result += TEXT("}\n");
 		}
@@ -285,8 +288,10 @@ namespace IFC {
 	}
 
 	FString GetAttributes(const Value& object) {
+		FString result = FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IFCData)));
+
 		if (!object.HasMember(ATTRIBUTES) || !object[ATTRIBUTES].IsObject())
-			return TEXT("");
+			return result;
 
 		const Value& attributes = object[ATTRIBUTES];
 		TArray<FString> names;
@@ -309,7 +314,7 @@ namespace IFC {
 			includeValues.Add(includeAttributeValues);
 		}
 
-		return ProcessAttributes(attributes, names, includeValues, enums, vectors, relationships);
+		return result + ProcessAttributes(attributes, names, includeValues, enums, vectors, relationships);
 	}
 
 #pragma endregion
