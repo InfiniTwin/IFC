@@ -40,6 +40,8 @@ namespace IFC {
 			.with(flecs::Prefab).optional()
 			.cached().build() });
 
+		world.component<Hierarchy>();
+
 		world.component<bsi_ifc_presentation_diffuseColor>().member<FLinearColor>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<bsi_ifc_class>()
 			.member<FString>(MEMBER(bsi_ifc_class::Code))
@@ -500,6 +502,10 @@ namespace IFC {
 			FString path = UTF8_TO_TCHAR((*object)[PATH].GetString());
 			bool isPrefab = !entities.Contains(path);
 
+			FString attributes = GetAttributes(*object);
+			if (!isPrefab)
+				attributes += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Hierarchy)));
+
 			const rapidjson::Value& value = *object;
 			const FString owner = value[OWNER].GetString();
 
@@ -508,7 +514,7 @@ namespace IFC {
 				*IFC::Scope(),
 				*path,
 				*GetInheritances(*object, isPrefab ? TEXT("") : *owner),
-				*GetAttributes(*object),
+				*attributes,
 				*GetChildren(*object, isPrefab));
 		}
 		return result;

@@ -71,6 +71,8 @@ namespace IFC {
 	struct IFCData {};
 	struct QueryIFCData { flecs::query<IFCData> Value; };
 
+	struct Hierarchy {};
+
 	// https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx
 	struct bsi_ifc_presentation_diffuseColor { FLinearColor Value; };
 	struct bsi_ifc_class { FString Code, Uri; };
