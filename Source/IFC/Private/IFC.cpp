@@ -327,24 +327,23 @@ namespace IFC {
 #pragma endregion
 
 #pragma region Data
-	FString GetInheritances(const Value& object, FString owner = "") {
-		const Value& inherits = object[INHERITS];
+	FString GetInheritances(const rapidjson::Value& object, FString owner = "") {
 		TArray<FString> inheritIDs;
 
 		if (!owner.IsEmpty())
 			inheritIDs.Add(owner);
 
-		if (object.HasMember(INHERITS) && !object[INHERITS].IsObject())
+		if (object.HasMember(INHERITS) && object[INHERITS].IsObject()) {
+			const rapidjson::Value& inherits = object[INHERITS];
 			for (auto itr = inherits.MemberBegin(); itr != inherits.MemberEnd(); ++itr) {
-				const Value& value = itr->value;
-				if (value.IsString())
-					inheritIDs.Add(UTF8_TO_TCHAR(value.GetString()));
+				const rapidjson::Value& v = itr->value;
+				if (v.IsString()) {
+					inheritIDs.Add(UTF8_TO_TCHAR(v.GetString()));
+				}
 			}
+		}
 
-		if (inheritIDs.Num() == 0)
-			return TEXT("");
-
-		return TEXT(": ") + FString::Join(inheritIDs, TEXT(", "));
+		return inheritIDs.Num() > 0 ? TEXT(": ") + FString::Join(inheritIDs, TEXT(", ")) : TEXT("");
 	}
 
 	FString GetChildren(const Value& object, bool isPrefab) {

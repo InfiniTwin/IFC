@@ -14,7 +14,8 @@ namespace IFC {
 		world.component<Layer>();
 		world.component<Path>().member<FString>(VALUE);
 		world.component<Id>().member<FString>(VALUE);
-		world.component<Version>().member<FString>(VALUE);
+		world.component<IfcxVersion>().member<FString>(VALUE);
+		world.component<DataVersion>().member<FString>(VALUE);
 		world.component<Author>().member<FString>(VALUE);
 		world.component<Timestamp>().member<FString>(VALUE);
 
