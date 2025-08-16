@@ -33,6 +33,7 @@ namespace IFC {
 
 		using namespace ECS;
 
+		world.component<Name>().member<FString>(VALUE);
 		world.component<IFCData>();
 		world.component<QueryIFCData>();
 		world.set(QueryIFCData{
@@ -104,11 +105,15 @@ namespace IFC {
 		return output;
 	}
 
-	FString FormatName(const FString& fullName) {
-		FString formatted = fullName;
+	FString FormatName(const FString& name) {
+		FString formatted = name;
 		for (const FString& symbol : { TEXT("::"), TEXT("-") })
 			formatted = formatted.Replace(*symbol, TEXT("_"));
 		return formatted;
+	}
+
+	FString CleanName(const FString& name) {
+		return name.Replace(TEXT("_"), TEXT(" "));
 	}
 
 	using namespace rapidjson;
@@ -357,11 +362,14 @@ namespace IFC {
 			if (value.IsString()) {
 				const FString inheritance = UTF8_TO_TCHAR(value.GetString());
 
-				result += FString::Printf(TEXT("\t%s%s: %s, %s {}\n"),
+				auto nameComponent = FString::Printf(TEXT("%s: {\"%s\"}"), UTF8_TO_TCHAR(COMPONENT(Name)), *CleanName(name));
+
+				result += FString::Printf(TEXT("\t%s%s: %s, %s {%s}\n"),
 					isPrefab ? PREFAB : TEXT(""),
 					*name,
 					*inheritance,
-					*owner);
+					*owner,
+					*nameComponent);
 			}
 		}
 
@@ -482,11 +490,8 @@ namespace IFC {
 
 		TSet<FString> entities; // Find entities: non repeating ID
 		for (const rapidjson::Value* object : sorted) {
-			if (!object || !object->IsObject()) continue;
-			entities.Add(UTF8_TO_TCHAR((*object)[PATH].GetString()));
-		}
-		for (const rapidjson::Value* object : sorted) {
-			if (!object || !object->IsObject()) continue;
+			if (object && object->IsObject())
+				entities.Add(UTF8_TO_TCHAR((*object)[PATH].GetString()));
 			if ((*object).HasMember(CHILDREN) && (*object)[CHILDREN].IsObject())
 				for (auto& child : (*object)[CHILDREN].GetObject())
 					entities.Remove(UTF8_TO_TCHAR(child.value.GetString()));

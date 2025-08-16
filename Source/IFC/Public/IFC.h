@@ -68,6 +68,7 @@ namespace IFC {
 
 	IFC_API void Register(flecs::world& world);
 
+	struct Name { FString Value; };
 	struct IFCData {};
 	struct QueryIFCData { flecs::query<IFCData> Value; };
 
