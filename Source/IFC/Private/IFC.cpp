@@ -4,6 +4,7 @@
 #include "LayerFeature.h"
 #include "Assets.h"
 #include "ECS.h"
+#include "ECSCore.h"
 #include "Containers/Map.h"
 #include "Algo/TopologicalSort.h"
 
@@ -506,7 +507,8 @@ namespace IFC {
 			FString path = UTF8_TO_TCHAR((*object)[PATH].GetString());
 			bool isPrefab = !entities.Contains(path);
 
-			FString attributes = GetAttributes(*object);
+			FString attributes = FString::Printf(TEXT("\t%s\n"), ECS::OrderedChildrenTrait);
+			attributes += GetAttributes(*object);
 			if (!isPrefab)
 				attributes += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Hierarchy)));
 
