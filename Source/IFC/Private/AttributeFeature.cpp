@@ -28,10 +28,12 @@ namespace IFC {
             nameAndOwner.Split(ATTRIBUTE_SEPARATOR, &owner, &name);
 ;
             auto nameComponent = FString::Printf(TEXT("\t\t%s: {\"%s\"}"), UTF8_TO_TCHAR(COMPONENT(Name)), *name);
+            auto attributeComponent = FString::Printf(TEXT("\t\t%s"), UTF8_TO_TCHAR(COMPONENT(Attribute)));
 
-            result += FString::Printf(TEXT("\t_ : %s {\n%s\n\t}\n"),
+            result += FString::Printf(TEXT("\t_ : %s {\n%s\n%s\n\t}\n"),
                 *owner,
-                *nameComponent);
+                *nameComponent,
+                *attributeComponent);
 
             //result += FString::Printf(TEXT("\t{\n%s\n\t}\n"),
             //    *IFC::FormatName(name),

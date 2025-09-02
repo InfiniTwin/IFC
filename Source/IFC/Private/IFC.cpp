@@ -38,6 +38,7 @@ namespace IFC {
 
 		world.component<Name>().member<FString>(VALUE);
 		world.component<IfcObject>();
+
 		world.component<QueryIfcObjects>();
 		world.set(QueryIfcObjects{
 			world.query_builder<IfcObject>(COMPONENT(QueryIfcObjects))
