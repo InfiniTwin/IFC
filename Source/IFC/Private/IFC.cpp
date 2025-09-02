@@ -2,6 +2,7 @@
 
 #include "IFC.h"
 #include "LayerFeature.h"
+#include "AttributeFeature.h"
 #include "Assets.h"
 #include "ECS.h"
 #include "ECSCore.h"
@@ -31,6 +32,7 @@ namespace IFC {
 
 	void Register(flecs::world& world) {
 		LayerFeature::RegisterComponents(world);
+		AttributeFeature::RegisterComponents(world);
 
 		using namespace ECS;
 
@@ -215,8 +217,7 @@ namespace IFC {
 		const TArray<bool>& includeValues,
 		const TArray<bool>& enums,
 		const TArray<bool>& vectors,
-		const TArray<bool>& relationships)
-	{
+		const TArray<bool>& relationships) {
 		FString result;
 
 		for (int32 i = 0; i < names.Num(); ++i) {
@@ -295,7 +296,7 @@ namespace IFC {
 		return result;
 	}
 
-	FString GetAttributes(const Value& object) {
+	FString GetAttributesOLD(const Value& object) {
 		FString result = FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IFCData)));
 
 		if (!object.HasMember(ATTRIBUTES) || !object[ATTRIBUTES].IsObject())
@@ -338,9 +339,8 @@ namespace IFC {
 			const rapidjson::Value& inherits = object[INHERITS];
 			for (auto itr = inherits.MemberBegin(); itr != inherits.MemberEnd(); ++itr) {
 				const rapidjson::Value& v = itr->value;
-				if (v.IsString()) {
+				if (v.IsString())
 					inheritIDs.Add(UTF8_TO_TCHAR(v.GetString()));
-				}
 			}
 		}
 
@@ -437,9 +437,8 @@ namespace IFC {
 		if (!source.HasMember(memberName) || !source[memberName].IsObject())
 			return;
 
-		if (!target.HasMember(memberName)) {
+		if (!target.HasMember(memberName))
 			target.AddMember(Value(memberName, allocator), Value(kObjectType), allocator);
-		}
 
 		Value& targetObject = target[memberName];
 		const Value& sourceObject = source[memberName];
@@ -502,35 +501,38 @@ namespace IFC {
 
 		FString result;
 		for (const rapidjson::Value* object : sorted) {
-			if (!object || !object->IsObject()) continue;
+			if (!object || !object->IsObject()) 
+				continue;
 
 			FString path = UTF8_TO_TCHAR((*object)[PATH].GetString());
 			bool isPrefab = !entities.Contains(path);
 
-			FString attributes = FString::Printf(TEXT("\t%s\n"), ECS::OrderedChildrenTrait);
-			attributes += GetAttributes(*object);
+			FString components = FString::Printf(TEXT("\t%s\n"), ECS::OrderedChildrenTrait);
+			components += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IFCData)));
 			if (!isPrefab)
-				attributes += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Hierarchy)));
+				components += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Hierarchy)));
 
 			const rapidjson::Value& value = *object;
 			const FString owner = value[OWNER].GetString();
 
-			result += FString::Printf(TEXT("%s%s.%s%s {\n%s%s}\n"),
+			result += FString::Printf(TEXT("%s%s.%s%s {\n%s%s%s}\n"),
 				isPrefab ? PREFAB : TEXT(""),
 				*IFC::Scope(),
 				*path,
 				*GetInheritances(*object, isPrefab ? TEXT("") : *owner),
-				*attributes,
-				*GetChildren(*object, isPrefab));
+				*components,
+				*GetChildren(*object, isPrefab),
+				*GetAttributes(*object));
 		}
 		return result;
 	}
 #pragma endregion
 
 	void InjectOwner(rapidjson::Value& object, const FString& layerPath, rapidjson::Document::AllocatorType& allocator) {
+		auto ownerPath = GetOwnerPath(layerPath);
 		if (!object.HasMember(ATTRIBUTES) || !object[ATTRIBUTES].IsObject()) {
 			object.AddMember(rapidjson::Value(OWNER, allocator),
-				rapidjson::Value(TCHAR_TO_UTF8(*GetOwnerPath(layerPath)), allocator),
+				rapidjson::Value(TCHAR_TO_UTF8(*ownerPath), allocator),
 				allocator);
 			return;
 		}
@@ -541,7 +543,7 @@ namespace IFC {
 
 		for (auto it = attributes.MemberBegin(); it != attributes.MemberEnd(); ++it) {
 			const FString originalKey = UTF8_TO_TCHAR(it->name.GetString());
-			const FString prefixedKey = layerPath + ATTRIBUTE_SEPARATOR + originalKey;
+			const FString prefixedKey = ownerPath + ATTRIBUTE_SEPARATOR + originalKey;
 			keys.Add(Value(TCHAR_TO_UTF8(*prefixedKey), allocator));
 			values.Add(Value(it->value, allocator));
 		}
@@ -556,7 +558,8 @@ namespace IFC {
 		rapidjson::Document tempDoc;
 		rapidjson::Document::AllocatorType& allocator = tempDoc.GetAllocator();
 		rapidjson::Value combinedData(rapidjson::kArrayType);
-		FString code;
+		
+		FString code = FString::Printf(TEXT("using %s\n"), *Scope());
 
 		FString layerNames;
 

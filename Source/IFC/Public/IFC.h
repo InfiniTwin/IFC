@@ -22,7 +22,6 @@ namespace IFC {
 #pragma region IFC
 	constexpr const char* DATA = "data";
 	constexpr const char* PATH = "path";
-	constexpr const char* ATTRIBUTES = "attributes";
 	constexpr const char* ATTRIBUTE_SEPARATOR = "::";
 	constexpr const char* INHERITS = "inherits";
 	constexpr const char* CHILDREN = "children";

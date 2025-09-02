@@ -32,7 +32,6 @@ namespace IFC {
 		return prefix + UTF8_TO_TCHAR(OWNER) + suffix;
 	}
 
-
 	FString ParseLayer(const rapidjson::Value& header, const FString path, const TArray<FString>& components) {
 		FString layer = IFC::Scope() + "." + IFC::FormatUUID(FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens));
 
