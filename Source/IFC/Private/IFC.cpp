@@ -37,10 +37,10 @@ namespace IFC {
 		using namespace ECS;
 
 		world.component<Name>().member<FString>(VALUE);
-		world.component<IFCData>();
-		world.component<QueryIFCData>();
-		world.set(QueryIFCData{
-			world.query_builder<IFCData>(COMPONENT(QueryIFCData))
+		world.component<IfcObject>();
+		world.component<QueryIfcObjects>();
+		world.set(QueryIfcObjects{
+			world.query_builder<IfcObject>(COMPONENT(QueryIfcObjects))
 			.with(flecs::Prefab).optional()
 			.cached().build() });
 
@@ -297,7 +297,7 @@ namespace IFC {
 	}
 
 	FString GetAttributesOLD(const Value& object) {
-		FString result = FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IFCData)));
+		FString result = FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
 
 		if (!object.HasMember(ATTRIBUTES) || !object[ATTRIBUTES].IsObject())
 			return result;
@@ -508,7 +508,7 @@ namespace IFC {
 			bool isPrefab = !entities.Contains(path);
 
 			FString components = FString::Printf(TEXT("\t%s\n"), ECS::OrderedChildrenTrait);
-			components += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IFCData)));
+			components += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
 			if (!isPrefab)
 				components += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Hierarchy)));
 
@@ -554,7 +554,7 @@ namespace IFC {
 			attributes.AddMember(MoveTemp(keys[i]), MoveTemp(values[i]), allocator);
 	}
 
-	void LoadIFCData(flecs::world& world, const TArray<flecs::entity> layers) {
+	void LoadIfcObjects(flecs::world& world, const TArray<flecs::entity> layers) {
 		rapidjson::Document tempDoc;
 		rapidjson::Document::AllocatorType& allocator = tempDoc.GetAllocator();
 		rapidjson::Value combinedData(rapidjson::kArrayType);
