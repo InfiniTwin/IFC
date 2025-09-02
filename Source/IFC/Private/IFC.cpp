@@ -47,7 +47,8 @@ namespace IFC {
 			.with(flecs::Prefab).optional()
 			.cached().build() });
 
-		world.component<Hierarchy>();
+		world.component<Root>();
+		world.component<Branch>();
 
 		world.component<bsi_ifc_presentation_diffuseColor>().member<FLinearColor>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<bsi_ifc_class>()
@@ -356,7 +357,11 @@ namespace IFC {
 
 		const FString owner = object[OWNER].GetString();
 		const Value& children = object[CHILDREN];
+
 		FString result;
+
+		if (isPrefab)
+			result += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Branch)));
 
 		for (auto itr = children.MemberBegin(); itr != children.MemberEnd(); ++itr) {
 			const FString name = FormatName(UTF8_TO_TCHAR(itr->name.GetString()));
@@ -513,7 +518,7 @@ namespace IFC {
 			FString components = FString::Printf(TEXT("\t%s\n"), ECS::OrderedChildrenTrait);
 			components += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
 			if (!isPrefab)
-				components += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Hierarchy)));
+				components += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Root)));
 
 			const rapidjson::Value& value = *object;
 			const FString owner = value[OWNER].GetString();
