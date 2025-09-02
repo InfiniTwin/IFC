@@ -39,9 +39,11 @@ namespace IFC {
 		world.component<Name>().member<FString>(VALUE);
 		world.component<IfcObject>();
 
-		world.component<QueryIfcObjects>();
-		world.set(QueryIfcObjects{
-			world.query_builder<IfcObject>(COMPONENT(QueryIfcObjects))
+		world.component<QueryIfcData>();
+		world.set(QueryIfcData{
+			world.query_builder<>(COMPONENT(QueryIfcData))
+			.with<IfcObject>().or_()
+			.with<Attribute>()
 			.with(flecs::Prefab).optional()
 			.cached().build() });
 
@@ -555,7 +557,7 @@ namespace IFC {
 			attributes.AddMember(MoveTemp(keys[i]), MoveTemp(values[i]), allocator);
 	}
 
-	void LoadIfcObjects(flecs::world& world, const TArray<flecs::entity> layers) {
+	void LoadIfcData(flecs::world& world, const TArray<flecs::entity> layers) {
 		rapidjson::Document tempDoc;
 		rapidjson::Document::AllocatorType& allocator = tempDoc.GetAllocator();
 		rapidjson::Value combinedData(rapidjson::kArrayType);

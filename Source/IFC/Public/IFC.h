@@ -59,7 +59,7 @@ namespace IFC {
 	FString FormatName(const FString& fullName);
 	FString FormatAttributeValue(const Value& value, bool isInnerArray = false);
 
-	IFC_API void LoadIfcObjects(flecs::world& world, const TArray<flecs::entity> layers);
+	IFC_API void LoadIfcData(flecs::world& world, const TArray<flecs::entity> layers);
 #pragma endregion
 
 #pragma region Flecs
@@ -69,7 +69,7 @@ namespace IFC {
 
 	struct Name { FString Value; };
 	struct IfcObject {};
-	struct QueryIfcObjects { flecs::query<IfcObject> Value; };
+	struct QueryIfcData { flecs::query<> Value; };
 
 	struct Hierarchy {};
 
