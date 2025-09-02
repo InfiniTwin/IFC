@@ -360,8 +360,10 @@ namespace IFC {
 
 		FString result;
 
-		if (isPrefab)
+		if (isPrefab) {
 			result += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Branch)));
+			result += FString::Printf(TEXT("\t%s\n"), ECS::OrderedChildrenTrait);
+		}
 
 		for (auto itr = children.MemberBegin(); itr != children.MemberEnd(); ++itr) {
 			const FString name = FormatName(UTF8_TO_TCHAR(itr->name.GetString()));
@@ -515,8 +517,7 @@ namespace IFC {
 			FString path = UTF8_TO_TCHAR((*object)[PATH].GetString());
 			bool isPrefab = !entities.Contains(path);
 
-			FString components = FString::Printf(TEXT("\t%s\n"), ECS::OrderedChildrenTrait);
-			components += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
+			FString components = FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
 			if (!isPrefab)
 				components += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Root)));
 
