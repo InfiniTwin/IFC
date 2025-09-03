@@ -35,9 +35,7 @@ namespace IFC {
 		else
 			string = JsonValueToString(value);
 
-		string.ReplaceInline(TEXT("$"), TEXT("\\$"));
-
-		return string;
+		return ECS::CleanCode(string);
 	}
 
 	static FString GetAttributeNestedNameAndValue(const rapidjson::Value& v) {

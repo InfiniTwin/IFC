@@ -27,6 +27,8 @@ namespace IFC {
 	constexpr const char* CHILDREN = "children";
 	constexpr const TCHAR* PREFAB = TEXT("prefab ");
 
+	inline constexpr TCHAR TOKEN_NAME[] = TEXT("[NAME]");
+
 	using namespace rapidjson;
 
 	FString FormatUUID(const FString& input);

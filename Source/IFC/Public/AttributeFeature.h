@@ -13,6 +13,8 @@ namespace IFC {
 
     constexpr const char* ATTRIBUTES = "attributes";
 
+	inline constexpr TCHAR TOKEN_VALUE[] = TEXT("[VALUE]");
+
 	struct Attribute {};
 	struct Value { FString Value; };
 
