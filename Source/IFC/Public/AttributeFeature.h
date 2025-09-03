@@ -13,7 +13,8 @@ namespace IFC {
 
     constexpr const char* ATTRIBUTES = "attributes";
 
-	struct Attribute { FString Value; };
+	struct Attribute {};
+	struct Value { FString Value; };
 
 	using namespace rapidjson; 
 

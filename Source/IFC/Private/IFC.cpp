@@ -125,13 +125,6 @@ namespace IFC {
 
 	using namespace rapidjson;
 
-	FString JsonValueToString(const rapidjson::Value& val) {
-		rapidjson::StringBuffer buffer;
-		rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-		val.Accept(writer);
-		return UTF8_TO_TCHAR(buffer.GetString());
-	}
-
 #pragma region Attributes
 
 	bool HasAttribute(const TSet<FString>& attributes, const FString& name) {
@@ -161,7 +154,7 @@ namespace IFC {
 		return HasAttribute(RelationshipAttributes, attribute);
 	}
 
-	FString FormatAttributeValue(const Value& value, bool isInnerArray) {
+	FString FormatAttributeValue(const rapidjson::Value& value, bool isInnerArray) {
 		if (value.IsString())
 			return FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(value.GetString())));
 		else if (value.IsNumber()) {
@@ -206,7 +199,7 @@ namespace IFC {
 			return TEXT("\"UNKNOWN\"");
 	}
 
-	FString GetOpacity(const Value& attributes) {
+	FString GetOpacity(const rapidjson::Value& attributes) {
 		for (auto itr = attributes.MemberBegin(); itr != attributes.MemberEnd(); ++itr) {
 			FString name = UTF8_TO_TCHAR(itr->name.GetString());
 			if (name.Contains(OPACITY_ATTRIBUTE))
@@ -216,7 +209,7 @@ namespace IFC {
 	}
 
 	FString ProcessAttributes(
-		const Value& attributes,
+		const rapidjson::Value& attributes,
 		const TArray<FString>& names,
 		const TArray<bool>& includeValues,
 		const TArray<bool>& enums,
@@ -240,7 +233,7 @@ namespace IFC {
 
 			if (memberItr == attributes.MemberEnd()) continue;
 
-			const Value& attrValue = memberItr->value;
+			const rapidjson::Value& attrValue = memberItr->value;
 			FString name = FormatName(attrName);
 
 			if (!includeValues[i]) {
@@ -267,7 +260,7 @@ namespace IFC {
 			}
 
 			if (relationships[i]) {
-				const Value& relObj = attrValue;
+				const rapidjson::Value& relObj = attrValue;
 				if (relObj.IsObject())
 					for (auto relIt = relObj.MemberBegin(); relIt != relObj.MemberEnd(); ++relIt) {
 						FString field = UTF8_TO_TCHAR(relIt->name.GetString());
@@ -300,13 +293,13 @@ namespace IFC {
 		return result;
 	}
 
-	FString GetAttributesOLD(const Value& object) {
+	FString GetAttributesOLD(const rapidjson::Value& object) {
 		FString result = FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
 
 		if (!object.HasMember(ATTRIBUTES) || !object[ATTRIBUTES].IsObject())
 			return result;
 
-		const Value& attributes = object[ATTRIBUTES];
+		const rapidjson::Value& attributes = object[ATTRIBUTES];
 		TArray<FString> names;
 		TArray<bool> enums;
 		TArray<bool> vectors;
@@ -351,12 +344,12 @@ namespace IFC {
 		return inheritIDs.Num() > 0 ? TEXT(": ") + FString::Join(inheritIDs, TEXT(", ")) : TEXT("");
 	}
 
-	FString GetChildren(const Value& object, bool isPrefab) {
+	FString GetChildren(const rapidjson::Value& object, bool isPrefab) {
 		if (!object.HasMember(CHILDREN) || !object[CHILDREN].IsObject())
 			return TEXT("");
 
 		const FString owner = object[OWNER].GetString();
-		const Value& children = object[CHILDREN];
+		const rapidjson::Value& children = object[CHILDREN];
 
 		FString result;
 
@@ -367,7 +360,7 @@ namespace IFC {
 
 		for (auto itr = children.MemberBegin(); itr != children.MemberEnd(); ++itr) {
 			const FString name = FormatName(UTF8_TO_TCHAR(itr->name.GetString()));
-			const Value& value = itr->value;
+			const rapidjson::Value& value = itr->value;
 
 			if (value.IsString()) {
 				const FString inheritance = UTF8_TO_TCHAR(value.GetString());
@@ -443,42 +436,42 @@ namespace IFC {
 		return sortedObjects;
 	}
 
-	void MergeObjectMembers(Value& target, const Value& source, const char* memberName, Document::AllocatorType& allocator) {
+	void MergeObjectMembers (rapidjson::Value& target, const rapidjson::Value& source, const char* memberName, Document::AllocatorType& allocator) {
 		if (!source.HasMember(memberName) || !source[memberName].IsObject())
 			return;
 
 		if (!target.HasMember(memberName))
-			target.AddMember(Value(memberName, allocator), Value(kObjectType), allocator);
+			target.AddMember(rapidjson::Value(memberName, allocator), rapidjson::Value(kObjectType), allocator);
 
-		Value& targetObject = target[memberName];
-		const Value& sourceObject = source[memberName];
+		rapidjson::Value& targetObject = target[memberName];
+		const rapidjson::Value& sourceObject = source[memberName];
 
 		for (auto itr = sourceObject.MemberBegin(); itr != sourceObject.MemberEnd(); ++itr) {
-			Value key(itr->name, allocator);
-			Value value(itr->value, allocator);
+			rapidjson::Value key(itr->name, allocator);
+			rapidjson::Value value(itr->value, allocator);
 			targetObject.RemoveMember(key);
 			targetObject.AddMember(key, value, allocator);
 		}
 	}
 
-	Value Merge(const Value& inputArray, Document::AllocatorType& allocator) {
-		Value mergedArray(kArrayType);
-		TMap<FString, Value> mergedObjects;
+	rapidjson::Value Merge(const rapidjson::Value& inputArray, Document::AllocatorType& allocator) {
+		rapidjson::Value mergedArray(kArrayType);
+		TMap<FString, rapidjson::Value> mergedObjects;
 
 		for (SizeType i = 0; i < inputArray.Size(); ++i) {
-			const Value& object = inputArray[i];
+			const rapidjson::Value& object = inputArray[i];
 			if (!object.IsObject() || !object.HasMember(PATH) || !object[PATH].IsString())
 				continue;
 
 			FString pathStr = UTF8_TO_TCHAR(object[PATH].GetString());
 
 			if (!mergedObjects.Contains(pathStr)) {
-				Value newObj(kObjectType);
+				rapidjson::Value newObj(kObjectType);
 				newObj.CopyFrom(object, allocator);
 				mergedObjects.Add(pathStr, MoveTemp(newObj));
 			}
 			else {
-				Value& existing = mergedObjects[pathStr];
+				rapidjson::Value& existing = mergedObjects[pathStr];
 				MergeObjectMembers(existing, object, INHERITS, allocator);
 				MergeObjectMembers(existing, object, ATTRIBUTES, allocator);
 				MergeObjectMembers(existing, object, CHILDREN, allocator);
@@ -486,7 +479,7 @@ namespace IFC {
 		}
 
 		for (const auto& Pair : mergedObjects) {
-			Value copy(Pair.Value, allocator);
+			rapidjson::Value copy(Pair.Value, allocator);
 			mergedArray.PushBack(copy, allocator);
 		}
 
@@ -546,15 +539,15 @@ namespace IFC {
 			return;
 		}
 
-		Value& attributes = object[ATTRIBUTES];
-		TArray<Value> keys;
-		TArray<Value> values;
+		rapidjson::Value& attributes = object[ATTRIBUTES];
+		TArray<rapidjson::Value> keys;
+		TArray<rapidjson::Value> values;
 
 		for (auto it = attributes.MemberBegin(); it != attributes.MemberEnd(); ++it) {
 			const FString originalKey = UTF8_TO_TCHAR(it->name.GetString());
 			const FString prefixedKey = ownerPath + ATTRIBUTE_SEPARATOR + originalKey;
-			keys.Add(Value(TCHAR_TO_UTF8(*prefixedKey), allocator));
-			values.Add(Value(it->value, allocator));
+			keys.Add(rapidjson::Value(TCHAR_TO_UTF8(*prefixedKey), allocator));
+			values.Add(rapidjson::Value(it->value, allocator));
 		}
 
 		attributes.RemoveAllMembers();

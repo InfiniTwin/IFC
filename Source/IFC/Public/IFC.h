@@ -57,7 +57,7 @@ namespace IFC {
 
 	FString FormatUUID(const FString& input);
 	FString FormatName(const FString& fullName);
-	FString FormatAttributeValue(const Value& value, bool isInnerArray = false);
+	FString FormatAttributeValue(const rapidjson::Value& value, bool isInnerArray = false);
 
 	IFC_API void LoadIfcData(flecs::world& world, const TArray<flecs::entity> layers);
 #pragma endregion
