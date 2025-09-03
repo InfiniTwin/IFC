@@ -46,8 +46,7 @@ namespace IFC {
 			FString componentName = UTF8_TO_TCHAR(it->name.GetString());
 			componentName[0] = FChar::ToUpper(componentName[0]);
 			FString component = IFC::FormatName(componentName);
-			FString value = IFC::FormatAttributeValue(it->value);
-
+			FString value = FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(it->value.GetString())));
 			result += FString::Printf(TEXT("\t%s: {%s}\n"), *component, *value);
 		}
 		result += TEXT("}\n");
