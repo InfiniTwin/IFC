@@ -80,7 +80,7 @@ namespace IFC {
 
 	using namespace rapidjson;
 
-	FString GetInheritances(const rapidjson::Value& object, FString owner = "") {
+	FString GetInheritances(const rapidjson::Value& object, const FString& owner, const FString& attributes = "") {
 		TArray<FString> inheritIDs;
 
 		if (!owner.IsEmpty())
@@ -93,6 +93,8 @@ namespace IFC {
 				inheritIDs.Add(inheritance);
 			}
 		}
+
+		inheritIDs.Add(attributes);
 
 		return inheritIDs.Num() > 0 ? TEXT(": ") + FString::Join(inheritIDs, TEXT(", ")) : TEXT("");
 	}
@@ -113,11 +115,9 @@ namespace IFC {
 
 		for (auto itr = children.MemberBegin(); itr != children.MemberEnd(); ++itr) {
 			const FString name = FormatName(UTF8_TO_TCHAR(itr->name.GetString()));
-			const rapidjson::Value& value = itr->value;
+			auto nameComponent = FString::Printf(TEXT("%s: {\"%s\"}"), UTF8_TO_TCHAR(COMPONENT(Name)), *CleanName(name));
 
 			FString inheritance = IFC::Scope() + "." + UTF8_TO_TCHAR(itr->value.GetString());
-
-			auto nameComponent = FString::Printf(TEXT("%s: {\"%s\"}"), UTF8_TO_TCHAR(COMPONENT(Name)), *CleanName(name));
 
 			result += FString::Printf(TEXT("\t%s%s: %s, %s {%s}\n"),
 				isPrefab ? PREFAB : TEXT(""),
@@ -268,14 +268,19 @@ namespace IFC {
 			const rapidjson::Value& value = *object;
 			const FString owner = value[OWNER].GetString();
 
-			result += FString::Printf(TEXT("%s%s.%s%s {\n%s%s%s}\n"),
+			TTuple<FString, FString> attributes = GetAttributes(*object, *path);
+
+			result += attributes.Get<1>();
+
+			FString inheritances = GetInheritances(*object, isPrefab ? TEXT("") : *owner, *attributes.Get<0>());
+
+			result += FString::Printf(TEXT("%s%s.%s%s {\n%s%s}\n"),
 				isPrefab ? PREFAB : TEXT(""),
 				*IFC::Scope(),
 				*path,
-				*GetInheritances(*object, isPrefab ? TEXT("") : *owner),
+				*inheritances,
 				*components,
-				*GetChildren(*object, isPrefab),
-				*GetAttributes(*object));
+				*GetChildren(*object, isPrefab));
 		}
 		return result;
 	}

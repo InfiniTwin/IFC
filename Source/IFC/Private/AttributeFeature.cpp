@@ -47,7 +47,7 @@ namespace IFC {
 			const FString childName = UTF8_TO_TCHAR(it->name.GetString());
 			const FString childValue = GetValueAsString(it->value);
 
-			result += TEXT("\n\t\tprefab _ {");
+			result += TEXT("\n\t\t_ {");
 			result += FString::Printf(TEXT("\n\t\t\t%s: {\"%s\"}"), UTF8_TO_TCHAR(COMPONENT(Name)), *childName);
 			result += FString::Printf(TEXT("\n\t\t\t%s: {\"%s\"}"), UTF8_TO_TCHAR(COMPONENT(Value)), *childValue);
 			result += TEXT("\n\t\t}");
@@ -64,11 +64,12 @@ namespace IFC {
 		return result;
 	}
 
-	FString GetAttributes(const rapidjson::Value& object) {
+	TTuple<FString, FString> GetAttributes(const rapidjson::Value& object, const FString& objectPath) {
 		if (!object.HasMember(ATTRIBUTES) || !object[ATTRIBUTES].IsObject())
-			return "";
+			return MakeTuple(FString(), FString());
 
-		FString result = "";
+		FString path = IFC::Scope() + "." + ATTRIBUTES + objectPath;
+		FString prefab = FString::Printf(TEXT("prefab %s {\n"), *path);
 
 		const rapidjson::Value& attributes = object[ATTRIBUTES];
 		for (auto itr = attributes.MemberBegin(); itr != attributes.MemberEnd(); ++itr) {
@@ -78,13 +79,15 @@ namespace IFC {
 
 			const rapidjson::Value& attrValue = itr->value;
 
-			result += FString::Printf(TEXT("\tprefab _ : %s {%s%s%s\n\t}\n"),
+			prefab += FString::Printf(TEXT("\t_ : %s {%s%s%s\n\t}\n"),
 				*owner,
 				*FString::Printf(TEXT("\n\t\t%s"), UTF8_TO_TCHAR(COMPONENT(Attribute))),
 				*GetAttributeNameAndValue(name, attrValue),
 				*GetAttributeNestedNameAndValue(attrValue));
 		}
 
-		return result;
+		prefab += "\n}\n";
+
+		return MakeTuple(path, prefab);
 	}
 }

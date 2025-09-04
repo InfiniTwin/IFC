@@ -20,5 +20,5 @@ namespace IFC {
 
 	using namespace rapidjson; 
 
-	FString GetAttributes(const rapidjson::Value& object);
+	TTuple<FString, FString> GetAttributes(const rapidjson::Value& object, const FString& objectPath);
 }
