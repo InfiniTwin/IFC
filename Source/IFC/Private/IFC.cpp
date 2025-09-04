@@ -36,8 +36,11 @@ namespace IFC {
 
 		using namespace ECS;
 
-		world.component<Name>().member<FString>(VALUE);
-		world.component<IfcObject>();
+		world.component<Name>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<IfcObject>().add(flecs::OnInstantiate, flecs::Inherit);
+
+		world.component<Root>();
+		world.component<Branch>().add(flecs::OnInstantiate, flecs::Inherit);
 
 		world.component<QueryIfcData>();
 		world.set(QueryIfcData{
@@ -45,9 +48,6 @@ namespace IFC {
 			.with<IfcObject>()
 			.with(flecs::Prefab).optional()
 			.cached().build() });
-
-		world.component<Root>();
-		world.component<Branch>();
 	}
 
 	FString FormatUUID(const FString& input) {
@@ -89,9 +89,8 @@ namespace IFC {
 		if (object.HasMember(INHERITS) && object[INHERITS].IsObject()) {
 			const rapidjson::Value& inherits = object[INHERITS];
 			for (auto itr = inherits.MemberBegin(); itr != inherits.MemberEnd(); ++itr) {
-				const rapidjson::Value& v = itr->value;
-				if (v.IsString())
-					inheritIDs.Add(UTF8_TO_TCHAR(v.GetString()));
+				FString inheritance = IFC::Scope() + "." + UTF8_TO_TCHAR(itr->value.GetString());
+				inheritIDs.Add(inheritance);
 			}
 		}
 
@@ -116,18 +115,16 @@ namespace IFC {
 			const FString name = FormatName(UTF8_TO_TCHAR(itr->name.GetString()));
 			const rapidjson::Value& value = itr->value;
 
-			if (value.IsString()) {
-				const FString inheritance = UTF8_TO_TCHAR(value.GetString());
+			FString inheritance = IFC::Scope() + "." + UTF8_TO_TCHAR(itr->value.GetString());
 
-				auto nameComponent = FString::Printf(TEXT("%s: {\"%s\"}"), UTF8_TO_TCHAR(COMPONENT(Name)), *CleanName(name));
+			auto nameComponent = FString::Printf(TEXT("%s: {\"%s\"}"), UTF8_TO_TCHAR(COMPONENT(Name)), *CleanName(name));
 
-				result += FString::Printf(TEXT("\t%s%s: %s, %s {%s}\n"),
-					isPrefab ? PREFAB : TEXT(""),
-					*name,
-					*inheritance,
-					*owner,
-					*nameComponent);
-			}
+			result += FString::Printf(TEXT("\t%s%s: %s, %s {%s}\n"),
+				isPrefab ? PREFAB : TEXT(""),
+				*name,
+				*inheritance,
+				*owner,
+				*nameComponent);
 		}
 
 		return result;
