@@ -25,17 +25,47 @@ namespace IFC {
 		return UTF8_TO_TCHAR(buffer.GetString());
 	}
 
+	static bool TryExtractRefString(const rapidjson::Value& value, FString& out) {
+		if (!value.IsObject()) return false;
+		auto it = value.FindMember("ref");
+		if (it == value.MemberEnd() || !it->value.IsString()) return false;
+		out = UTF8_TO_TCHAR(it->value.GetString());
+		return true;
+	}
+
 	static FString GetValueAsString(const rapidjson::Value& value) {
-		FString string;
-
+		// 1) Plain string
 		if (value.IsString())
-			string = UTF8_TO_TCHAR(value.GetString());
-		else if (value.IsObject() && value.MemberCount() == 1) // ref
-			string = UTF8_TO_TCHAR(value.FindMember("ref")->value.GetString());
-		else
-			string = JsonValueToString(value);
+			return ECS::CleanCode(UTF8_TO_TCHAR(value.GetString()));
 
-		return ECS::CleanCode(string);
+		// 2) Single { "ref": "..." }
+		if (value.IsObject() && value.MemberCount() == 1) {
+			FString refString;
+			if (TryExtractRefString(value, refString))
+				return ECS::CleanCode(refString);
+		}
+
+		// 3) Array of { "ref": "..." }
+		if (value.IsArray()) {
+			TArray<FString> refs;
+			refs.Reserve(static_cast<int32>(value.Size()));
+
+			for (auto& elem : value.GetArray()) {
+				FString refString;
+				if (TryExtractRefString(elem, refString))
+					refs.Add(ECS::CleanCode(refString));
+			}
+
+			if (refs.Num() > 0) {
+				TArray<FString> quoted;
+				quoted.Reserve(refs.Num());
+				for (const FString& s : refs)
+					quoted.Add(FString::Printf(TEXT("%s"), *s));
+				return FString::Printf(TEXT("%s"), *FString::Join(quoted, TEXT(",")));
+			}
+		}
+
+		return ECS::CleanCode(JsonValueToString(value));
 	}
 
 	static FString GetAttributeNestedNameAndValue(const rapidjson::Value& v) {
@@ -45,7 +75,10 @@ namespace IFC {
 		FString result;
 		for (auto it = v.MemberBegin(); it != v.MemberEnd(); ++it) {
 			const FString childName = UTF8_TO_TCHAR(it->name.GetString());
-			const FString childValue = GetValueAsString(it->value);
+			const FString childValue = (
+				childName == "faceVertexIndices" || 
+				childName == "points")
+				? "" : GetValueAsString(it->value);
 
 			result += TEXT("\n\t\t_ {");
 			result += FString::Printf(TEXT("\n\t\t\t%s: {\"%s\"}"), UTF8_TO_TCHAR(COMPONENT(Name)), *childName);

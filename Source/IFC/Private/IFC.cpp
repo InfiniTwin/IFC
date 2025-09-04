@@ -355,7 +355,5 @@ namespace IFC {
 
 		code += ParseData(combinedData, allocator);
 		ECS::RunCode(world, layerNames, code);
-
-		UE_LOG(LogTemp, Warning, TEXT(">>> LoadIfcDatas"));
 	}
 }
