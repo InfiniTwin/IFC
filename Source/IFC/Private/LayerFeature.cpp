@@ -9,7 +9,7 @@
 #include "rapidjson/writer.h"
 
 namespace IFC {
-	void LayerFeature::RegisterComponents(flecs::world& world) {
+	void LayerFeature::CreateComponents(flecs::world& world) {
 		using namespace ECS;
 		world.component<Layer>();
 		world.component<Path>().member<FString>(VALUE);
@@ -21,6 +21,15 @@ namespace IFC {
 
 		world.component<Owner>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 	}
+
+	void LayerFeature::CreateQueries(flecs::world& world) {
+		world.component<QueryLayers>();
+		world.set(QueryLayers{
+			world.query_builder<>(COMPONENT(QueryLayers))
+			.with<Layer>()
+			.with<Id>()
+			.cached().build() });
+	};
 
 	using namespace rapidjson;
 
@@ -68,6 +77,17 @@ namespace IFC {
 		FString code;
 
 		for (const FString& path : paths) {
+			bool exists = false;
+			world.try_get<QueryLayers>()->Value.each([&path, &exists](flecs::entity layer) {
+				if (layer.try_get<Path>()->Value == path) {
+					exists = true;
+					return;
+				}
+				});
+
+			if (exists)
+				continue;
+
 			auto jsonString = Assets::LoadTextFile(path);
 			auto formatted = FormatUUID(jsonString);
 			free(jsonString);

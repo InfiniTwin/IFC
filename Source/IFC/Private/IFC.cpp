@@ -31,9 +31,6 @@ namespace IFC {
 	}
 
 	void Register(flecs::world& world) {
-		LayerFeature::RegisterComponents(world);
-		AttributeFeature::RegisterComponents(world);
-
 		using namespace ECS;
 
 		world.component<Name>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
@@ -48,6 +45,11 @@ namespace IFC {
 			.with<IfcObject>()
 			.with(flecs::Prefab).optional()
 			.cached().build() });
+
+		LayerFeature::CreateComponents(world);
+		AttributeFeature::CreateComponents(world);
+
+		LayerFeature::CreateQueries(world);
 	}
 
 	FString FormatUUID(const FString& input) {
@@ -353,5 +355,7 @@ namespace IFC {
 
 		code += ParseData(combinedData, allocator);
 		ECS::RunCode(world, layerNames, code);
+
+		UE_LOG(LogTemp, Warning, TEXT(">>> LoadIfcDatas"));
 	}
 }

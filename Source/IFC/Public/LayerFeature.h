@@ -7,7 +7,8 @@
 
 namespace IFC {
 	struct LayerFeature{
-		static void RegisterComponents(flecs::world& world);
+		static void CreateComponents(flecs::world& world);
+		static void CreateQueries(flecs::world& world);
 	};
 
 	constexpr const char* HEADER = "header";
@@ -22,6 +23,8 @@ namespace IFC {
 	struct Timestamp { FString Value; };
 
 	struct Owner { FString Value; };
+
+	struct QueryLayers { flecs::query<> Value; };
 
 	FString GetOwnerPath(const FString& layerPath);
 

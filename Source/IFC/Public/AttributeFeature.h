@@ -8,7 +8,7 @@
 
 namespace IFC {
 	struct AttributeFeature {
-		static void RegisterComponents(flecs::world& world);
+		static void CreateComponents(flecs::world& world);
 	};
 
     constexpr const char* ATTRIBUTES = "attributes";

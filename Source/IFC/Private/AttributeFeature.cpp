@@ -10,7 +10,7 @@
 #include "rapidjson/writer.h"
 
 namespace IFC {
-	void AttributeFeature::RegisterComponents(flecs::world& world) {
+	void AttributeFeature::CreateComponents(flecs::world& world) {
 		using namespace ECS;
 		world.component<Attribute>().add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<Value>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
@@ -69,7 +69,9 @@ namespace IFC {
 			return MakeTuple(FString(), FString());
 
 		FString path = IFC::Scope() + "." + ATTRIBUTES + objectPath;
+
 		FString prefab = FString::Printf(TEXT("prefab %s {\n"), *path);
+		prefab += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
 
 		const rapidjson::Value& attributes = object[ATTRIBUTES];
 		for (auto itr = attributes.MemberBegin(); itr != attributes.MemberEnd(); ++itr) {
