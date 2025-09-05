@@ -119,8 +119,8 @@ namespace IFC {
 
 		if (object.HasMember(INHERITS) && object[INHERITS].IsObject()) {
 			const rapidjson::Value& inherits = object[INHERITS];
-			for (auto itr = inherits.MemberBegin(); itr != inherits.MemberEnd(); ++itr) {
-				FString inheritance = IFC::Scope() + "." + UTF8_TO_TCHAR(itr->value.GetString());
+			for (auto inherit = inherits.MemberBegin(); inherit != inherits.MemberEnd(); ++inherit) {
+				FString inheritance = IFC::Scope() + "." + UTF8_TO_TCHAR(inherit->value.GetString());
 				inheritIDs.Add(inheritance);
 			}
 		}
@@ -142,11 +142,11 @@ namespace IFC {
 			result += FString::Printf(TEXT("\t%s\n"), ECS::OrderedChildrenTrait);
 		}
 
-		for (auto itr = children.MemberBegin(); itr != children.MemberEnd(); ++itr) {
-			const FString name = FormatName(UTF8_TO_TCHAR(itr->name.GetString()));
+		for (auto child = children.MemberBegin(); child != children.MemberEnd(); ++child) {
+			const FString name = FormatName(UTF8_TO_TCHAR(child->name.GetString()));
 			auto nameComponent = FString::Printf(TEXT("%s: {\"%s\"}"), UTF8_TO_TCHAR(COMPONENT(Name)), *CleanName(name));
 
-			FString inheritance = IFC::Scope() + "." + UTF8_TO_TCHAR(itr->value.GetString());
+			FString inheritance = IFC::Scope() + "." + UTF8_TO_TCHAR(child->value.GetString());
 
 			result += FString::Printf(TEXT("\t%s%s: %s, %s {%s}\n"),
 				isPrefab ? PREFAB : TEXT(""),
@@ -226,9 +226,9 @@ namespace IFC {
 		rapidjson::Value& targetObject = target[memberName];
 		const rapidjson::Value& sourceObject = source[memberName];
 
-		for (auto itr = sourceObject.MemberBegin(); itr != sourceObject.MemberEnd(); ++itr) {
-			rapidjson::Value key(itr->name, allocator);
-			rapidjson::Value value(itr->value, allocator);
+		for (auto member = sourceObject.MemberBegin(); member != sourceObject.MemberEnd(); ++member) {
+			rapidjson::Value key(member->name, allocator);
+			rapidjson::Value value(member->value, allocator);
 			targetObject.RemoveMember(key);
 			targetObject.AddMember(key, value, allocator);
 		}

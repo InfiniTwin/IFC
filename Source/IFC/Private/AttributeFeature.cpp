@@ -5,6 +5,7 @@
 #include "IFC.h"
 #include "Assets.h"
 #include "ECS.h"
+#include "MeshSubsystem.h"
 #include "rapidjson/document.h"
 #include "rapidjson/error/en.h"
 #include "rapidjson/writer.h"
@@ -14,9 +15,42 @@ namespace IFC {
 		using namespace ECS;
 		world.component<Attribute>().add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<Value>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<Mesh>().member<int32>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);;
 	}
 
 	using namespace rapidjson;
+
+	int32 CreateMesh(const rapidjson::Value& value) {
+		if (value.IsObject()) {
+			const rapidjson::Value* indicesArray = value.HasMember(MESH_INDICES) ? &value[MESH_INDICES] : nullptr;
+			const rapidjson::Value* pointsArray = value.HasMember(MESH_POINTS) ? &value[MESH_POINTS] : nullptr;
+
+			if (indicesArray && indicesArray->IsArray() && pointsArray && pointsArray->IsArray()) {
+				TArray<int32> faceVertexIndices;
+				faceVertexIndices.Reserve(static_cast<int32>(indicesArray->Size()));
+				for (auto& elem : indicesArray->GetArray())
+					if (elem.IsInt())
+						faceVertexIndices.Add(elem.GetInt());
+
+				TArray<FVector3f> points;
+				points.Reserve(static_cast<int32>(pointsArray->Size()));
+				for (auto& p : pointsArray->GetArray())
+					if (p.IsArray() && p.Size() == 3) {
+						float x = static_cast<float>(p[0].GetDouble());
+						float y = static_cast<float>(p[1].GetDouble());
+						float z = static_cast<float>(p[2].GetDouble());
+						points.Add(FVector3f(x, y, z));
+					}
+
+				if (faceVertexIndices.Num() > 0 && points.Num() > 0) {
+					UWorld* worldObj = GWorld;
+					return worldObj->GetSubsystem<UMeshSubsystem>()->CreateMesh(worldObj, points, faceVertexIndices);
+				}
+			}
+		}
+
+		return INDEX_NONE;
+	}
 
 	FString JsonValueToString(const rapidjson::Value& value) {
 		rapidjson::StringBuffer buffer;
@@ -27,9 +61,9 @@ namespace IFC {
 
 	static bool TryExtractRefString(const rapidjson::Value& value, FString& out) {
 		if (!value.IsObject()) return false;
-		auto it = value.FindMember("ref");
-		if (it == value.MemberEnd() || !it->value.IsString()) return false;
-		out = UTF8_TO_TCHAR(it->value.GetString());
+		auto ref = value.FindMember("ref");
+		if (ref == value.MemberEnd() || !ref->value.IsString()) return false;
+		out = UTF8_TO_TCHAR(ref->value.GetString());
 		return true;
 	}
 
@@ -68,17 +102,14 @@ namespace IFC {
 		return ECS::CleanCode(JsonValueToString(value));
 	}
 
-	static FString GetAttributeNestedNameAndValue(const rapidjson::Value& v) {
-		if (!v.IsObject())
+	static FString GetAttributeNestedNameAndValue(const rapidjson::Value& value) {
+		if (!value.IsObject())
 			return TEXT("");
 
 		FString result;
-		for (auto it = v.MemberBegin(); it != v.MemberEnd(); ++it) {
-			const FString childName = UTF8_TO_TCHAR(it->name.GetString());
-			const FString childValue = (
-				childName == "faceVertexIndices" || 
-				childName == "points")
-				? "" : GetValueAsString(it->value);
+		for (auto child = value.MemberBegin(); child != value.MemberEnd(); ++child) {
+			const FString childName = UTF8_TO_TCHAR(child->name.GetString());
+			const FString childValue = GetValueAsString(child->value);
 
 			result += TEXT("\n\t\t_ {");
 			result += FString::Printf(TEXT("\n\t\t\t%s: {\"%s\"}"), UTF8_TO_TCHAR(COMPONENT(Name)), *childName);
@@ -103,26 +134,40 @@ namespace IFC {
 
 		FString path = IFC::Scope() + "." + ATTRIBUTES + objectPath;
 
-		FString prefab = FString::Printf(TEXT("%s {\n"), *path);
-		prefab += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
+		FString attributesEntity = FString::Printf(TEXT("%s {\n"), *path);
+		attributesEntity += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
 
 		const rapidjson::Value& attributes = object[ATTRIBUTES];
-		for (auto itr = attributes.MemberBegin(); itr != attributes.MemberEnd(); ++itr) {
-			const FString nameAndOwner = UTF8_TO_TCHAR(itr->name.GetString());
+		for (auto attribute = attributes.MemberBegin(); attribute != attributes.MemberEnd(); ++attribute) {
+			FString attributeEntities = "";
+			bool processed = false;
+
+			const FString nameAndOwner = UTF8_TO_TCHAR(attribute->name.GetString());
 			FString owner, name;
 			nameAndOwner.Split(ATTRIBUTE_SEPARATOR, &owner, &name);
 
-			const rapidjson::Value& attrValue = itr->value;
+			const rapidjson::Value& value = attribute->value;
 
-			prefab += FString::Printf(TEXT("\t_ : %s {%s%s%s\n\t}\n"),
+			if (name == ATTRIBUTE_MESH) {
+				int32 meshId = CreateMesh(value);
+				if (meshId != INDEX_NONE)
+					attributeEntities += FString::Printf(TEXT("\n\t\t%s: {%d}"), UTF8_TO_TCHAR(COMPONENT(Mesh)), meshId);
+				processed = true;
+			}
+
+			if (!processed) {
+				attributeEntities += FString::Printf(TEXT("\n\t\t%s"), UTF8_TO_TCHAR(COMPONENT(Attribute)));
+				attributeEntities += GetAttributeNameAndValue(name, value);
+				attributeEntities += GetAttributeNestedNameAndValue(value);
+			}
+
+			attributesEntity += FString::Printf(TEXT("\t_ : %s {%s\n\t}\n"),
 				*owner,
-				*FString::Printf(TEXT("\n\t\t%s"), UTF8_TO_TCHAR(COMPONENT(Attribute))),
-				*GetAttributeNameAndValue(name, attrValue),
-				*GetAttributeNestedNameAndValue(attrValue));
+				*attributeEntities);
 		}
 
-		prefab += "\n}\n";
+		attributesEntity += "\n}\n";
 
-		return MakeTuple(path, prefab);
+		return MakeTuple(path, attributesEntity);
 	}
 }

@@ -19,7 +19,12 @@ public class IFC : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[] {
 			"CoreUObject",
 			"Engine",
-			"Json",
+            "MeshDescription",
+			"StaticMeshDescription",
+            "RenderCore",
+			"RHI",
+			"MeshUtilitiesCommon",
+            "Json",
 		});
 	}
 }
