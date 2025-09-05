@@ -103,7 +103,7 @@ namespace IFC {
 
 		FString path = IFC::Scope() + "." + ATTRIBUTES + objectPath;
 
-		FString prefab = FString::Printf(TEXT("prefab %s {\n"), *path);
+		FString prefab = FString::Printf(TEXT("%s {\n"), *path);
 		prefab += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
 
 		const rapidjson::Value& attributes = object[ATTRIBUTES];

@@ -111,7 +111,7 @@ namespace IFC {
 
 	using namespace rapidjson;
 
-	FString GetInheritances(const rapidjson::Value& object, const FString& owner, const FString& attributes = "") {
+	FString GetInheritances(const rapidjson::Value& object, const FString& owner) {
 		TArray<FString> inheritIDs;
 
 		if (!owner.IsEmpty())
@@ -124,8 +124,6 @@ namespace IFC {
 				inheritIDs.Add(inheritance);
 			}
 		}
-
-		inheritIDs.Add(attributes);
 
 		return inheritIDs.Num() > 0 ? TEXT(": ") + FString::Join(inheritIDs, TEXT(", ")) : TEXT("");
 	}
@@ -292,27 +290,25 @@ namespace IFC {
 			FString path = UTF8_TO_TCHAR((*object)[PATH].GetString());
 			bool isPrefab = !entities.Contains(path);
 
-			FString components = FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
-			if (!isPrefab)
-			{
-				components += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Root)));
-				components += FString::Printf(TEXT("\n\t%s: {\"%s\"}\n"), UTF8_TO_TCHAR(COMPONENT(Name)), *ToUUID(path));
-			}
-
-			const rapidjson::Value& value = *object;
-			const FString owner = value[OWNER].GetString();
-
 			TTuple<FString, FString> attributes = GetAttributes(*object, *path);
 
 			result += attributes.Get<1>();
 
-			FString inheritances = GetInheritances(*object, isPrefab ? TEXT("") : *owner, *attributes.Get<0>());
+			FString components = FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
+			if (isPrefab)
+				components += FString::Printf(TEXT("\t(%s, %s)\n"), UTF8_TO_TCHAR(COMPONENT(Attribute)), *attributes.Get<0>());
+			else {
+				components += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Root)));
+				components += FString::Printf(TEXT("\t%s: {\"%s\"}\n"), UTF8_TO_TCHAR(COMPONENT(Name)), *ToUUID(path));
+			}
+
+			const FString owner = (*object)[OWNER].GetString();
 
 			result += FString::Printf(TEXT("%s%s.%s%s {\n%s%s}\n"),
 				isPrefab ? PREFAB : TEXT(""),
 				*IFC::Scope(),
 				*path,
-				*inheritances,
+				*GetInheritances(*object, isPrefab ? TEXT("") : *owner),
 				*components,
 				*GetChildren(*object, isPrefab));
 		}
