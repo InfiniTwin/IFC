@@ -69,6 +69,35 @@ namespace IFC {
 		return output;
 	}
 
+	FString ToUUID(const FString& input) {
+		FString output = input;
+
+		// Match "ID" (case-sensitive) followed by exactly 32 hex chars.
+		// If you want case-insensitive "id", switch to: TEXT(R"((?i)ID([a-f0-9]{32}))")
+		const FRegexPattern idPattern(TEXT(R"(ID([a-fA-F0-9]{32}))"));
+		FRegexMatcher matcher(idPattern, output);
+
+		while (matcher.FindNext()) {
+			const FString fullMatch = matcher.GetCaptureGroup(0);
+			const FString rawUuid = matcher.GetCaptureGroup(1); // 32 hex chars
+
+			// Insert dashes via slices
+			const FString dashed = FString::Printf(
+				TEXT("%s-%s-%s-%s-%s"),
+				*rawUuid.Mid(0, 8),
+				*rawUuid.Mid(8, 4),
+				*rawUuid.Mid(12, 4),
+				*rawUuid.Mid(16, 4),
+				*rawUuid.Mid(20, 12)
+			);
+
+			// Replace this specific match (keep IgnoreCase consistent with your forward function)
+			output = output.Replace(*fullMatch, *dashed, ESearchCase::IgnoreCase);
+		}
+
+		return output;
+	}
+
 	FString FormatName(const FString& name) {
 		FString formatted = name;
 		for (const FString& symbol : { TEXT("::"), TEXT("-") })
@@ -265,7 +294,10 @@ namespace IFC {
 
 			FString components = FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
 			if (!isPrefab)
+			{
 				components += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Root)));
+				components += FString::Printf(TEXT("\n\t%s: {\"%s\"}\n"), UTF8_TO_TCHAR(COMPONENT(Name)), *ToUUID(path));
+			}
 
 			const rapidjson::Value& value = *object;
 			const FString owner = value[OWNER].GetString();
