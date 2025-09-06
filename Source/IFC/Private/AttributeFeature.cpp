@@ -5,7 +5,7 @@
 #include "IFC.h"
 #include "Assets.h"
 #include "ECS.h"
-#include "MeshSubsystem.h"
+#include "ModelFeature.h"
 #include "rapidjson/document.h"
 #include "rapidjson/error/en.h"
 #include "rapidjson/writer.h"
@@ -15,42 +15,9 @@ namespace IFC {
 		using namespace ECS;
 		world.component<Attribute>().add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<Value>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
-		world.component<Mesh>().member<int32>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);;
 	}
 
 	using namespace rapidjson;
-
-	int32 CreateMesh(const rapidjson::Value& value) {
-		if (value.IsObject()) {
-			const rapidjson::Value* indicesArray = value.HasMember(MESH_INDICES) ? &value[MESH_INDICES] : nullptr;
-			const rapidjson::Value* pointsArray = value.HasMember(MESH_POINTS) ? &value[MESH_POINTS] : nullptr;
-
-			if (indicesArray && indicesArray->IsArray() && pointsArray && pointsArray->IsArray()) {
-				TArray<int32> faceVertexIndices;
-				faceVertexIndices.Reserve(static_cast<int32>(indicesArray->Size()));
-				for (auto& elem : indicesArray->GetArray())
-					if (elem.IsInt())
-						faceVertexIndices.Add(elem.GetInt());
-
-				TArray<FVector3f> points;
-				points.Reserve(static_cast<int32>(pointsArray->Size()));
-				for (auto& p : pointsArray->GetArray())
-					if (p.IsArray() && p.Size() == 3) {
-						float x = static_cast<float>(p[0].GetDouble());
-						float y = static_cast<float>(p[1].GetDouble());
-						float z = static_cast<float>(p[2].GetDouble());
-						points.Add(FVector3f(x, y, z));
-					}
-
-				if (faceVertexIndices.Num() > 0 && points.Num() > 0) {
-					UWorld* worldObj = GWorld;
-					return worldObj->GetSubsystem<UMeshSubsystem>()->CreateMesh(worldObj, points, faceVertexIndices);
-				}
-			}
-		}
-
-		return INDEX_NONE;
-	}
 
 	FString JsonValueToString(const rapidjson::Value& value) {
 		rapidjson::StringBuffer buffer;
@@ -128,7 +95,46 @@ namespace IFC {
 		return result;
 	}
 
-	TTuple<FString, FString> GetAttributes(const rapidjson::Value& object, const FString& objectPath) {
+	FString ProcessAttribute(flecs::world& world, const rapidjson::Value& value, const FString& name) {
+		FString result = "";
+
+		if (name == ATTRIBUTE_XFORMOP) {
+			FTransform transform = ToTransform(value);
+			const FVector location = transform.GetLocation();
+			const FRotator rotation = transform.Rotator();
+			const FVector scale = transform.GetScale3D();
+
+			result += FString::Printf(
+				TEXT("\n\t\t%s: {{%.6f, %.6f, %.6f}}"),
+				UTF8_TO_TCHAR(COMPONENT(Position)),
+				location.X, location.Y, location.Z);
+
+			result += FString::Printf(
+				TEXT("\n\t\t%s: {{%.6f, %.6f, %.6f}}"),
+				UTF8_TO_TCHAR(COMPONENT(Rotation)),
+				rotation.Pitch, rotation.Yaw, rotation.Roll);
+
+			result += FString::Printf(
+				TEXT("\n\t\t%s: {{%.6f, %.6f, %.6f}}"),
+				UTF8_TO_TCHAR(COMPONENT(Scale)),
+				scale.X, scale.Y, scale.Z);
+
+			return result;
+		}
+
+		if (name == ATTRIBUTE_MESH) {
+			result += FString::Printf(
+				TEXT("\n\t\t%s: {%d}"),
+				UTF8_TO_TCHAR(COMPONENT(Mesh)),
+				CreateMesh(world, value));
+
+			return result;
+		}
+
+		return result;
+	}
+
+	TTuple<FString, FString> GetAttributes(flecs::world& world, const rapidjson::Value& object, const FString& objectPath) {
 		if (!object.HasMember(ATTRIBUTES) || !object[ATTRIBUTES].IsObject())
 			return MakeTuple(FString(), FString());
 
@@ -148,14 +154,11 @@ namespace IFC {
 
 			const rapidjson::Value& value = attribute->value;
 
-			if (name == ATTRIBUTE_MESH) {
-				int32 meshId = CreateMesh(value);
-				if (meshId != INDEX_NONE)
-					attributeEntities += FString::Printf(TEXT("\n\t\t%s: {%d}"), UTF8_TO_TCHAR(COMPONENT(Mesh)), meshId);
-				processed = true;
-			}
+			FString processedAttribute = ProcessAttribute(world, value, name);
 
-			if (!processed) {
+			if (!processedAttribute.IsEmpty())
+				attributeEntities += processedAttribute;
+			else {
 				attributeEntities += FString::Printf(TEXT("\n\t\t%s"), UTF8_TO_TCHAR(COMPONENT(Attribute)));
 				attributeEntities += GetAttributeNameAndValue(name, value);
 				attributeEntities += GetAttributeNestedNameAndValue(value);

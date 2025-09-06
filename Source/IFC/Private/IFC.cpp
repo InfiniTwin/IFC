@@ -3,6 +3,7 @@
 #include "IFC.h"
 #include "LayerFeature.h"
 #include "AttributeFeature.h"
+#include "ModelFeature.h"
 #include "Assets.h"
 #include "ECS.h"
 #include "ECSCore.h"
@@ -48,8 +49,11 @@ namespace IFC {
 
 		LayerFeature::CreateComponents(world);
 		AttributeFeature::CreateComponents(world);
+		ModelFeature::CreateComponents(world);
 
 		LayerFeature::CreateQueries(world);
+
+		ModelFeature::CreateObservers(world);
 	}
 
 	FString FormatUUID(const FString& input) {
@@ -266,7 +270,7 @@ namespace IFC {
 		return mergedArray;
 	}
 
-	FString ParseData(const rapidjson::Value& data, rapidjson::Document::AllocatorType& allocator) {
+	FString ParseData(flecs::world& world, const rapidjson::Value& data, rapidjson::Document::AllocatorType& allocator) {
 		rapidjson::Value merged = Merge(data, allocator);
 		TArray<const rapidjson::Value*> sorted = Sort(merged);
 
@@ -290,7 +294,7 @@ namespace IFC {
 			FString path = UTF8_TO_TCHAR((*object)[PATH].GetString());
 			bool isPrefab = !entities.Contains(path);
 
-			TTuple<FString, FString> attributes = GetAttributes(*object, *path);
+			TTuple<FString, FString> attributes = GetAttributes(world, *object, *path);
 
 			result += attributes.Get<1>();
 
@@ -381,7 +385,7 @@ namespace IFC {
 			layerNames += layer.try_get<Id>()->Value + " | ";
 		}
 
-		code += ParseData(combinedData, allocator);
+		code += ParseData(world, combinedData, allocator);
 		ECS::RunCode(world, layerNames, code);
 	}
 }

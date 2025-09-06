@@ -17,15 +17,8 @@ namespace IFC {
 
 	struct Attribute {};
 	struct Value { FString Value; };
-	struct Mesh { int32 Value; };
 
 	constexpr const char* ATTRIBUTE_SEPARATOR = "::";
 
-	constexpr const char* ATTRIBUTE_MESH = "usd::usdgeom::mesh";
-	constexpr const char* MESH_INDICES = "faceVertexIndices";
-	constexpr const char* MESH_POINTS = "points";
-
-	using namespace rapidjson; 
-
-	TTuple<FString, FString> GetAttributes(const rapidjson::Value& object, const FString& objectPath);
+	TTuple<FString, FString> GetAttributes(flecs::world& world, const rapidjson::Value& object, const FString& objectPath);
 }

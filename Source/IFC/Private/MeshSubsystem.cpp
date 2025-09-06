@@ -23,6 +23,8 @@ int32 UMeshSubsystem::CreateMesh(UWorld* world, const TArray<FVector3f>& points,
     UStaticMesh* mesh = NewObject<UStaticMesh>(this, NAME_None, RF_Transient);
     if (!mesh) return INDEX_NONE;
 
+    mesh->SetMinLOD(0);
+
     FMeshDescription meshDescription;
     FStaticMeshAttributes attributes(meshDescription);
     attributes.Register();
@@ -30,8 +32,12 @@ int32 UMeshSubsystem::CreateMesh(UWorld* world, const TArray<FVector3f>& points,
     TVertexAttributesRef<FVector3f> vertexPositions = attributes.GetVertexPositions();
 
     TArray<FVertexID> vertexIds;
-    vertexIds.Reserve(points.Num());
-    for (const FVector3f& position : points) {
+
+    TArray<FVector3f> scaledPoints = points;
+    for (FVector3f& point : scaledPoints) point *= 100.f;
+
+    vertexIds.Reserve(scaledPoints.Num());
+    for (const FVector3f& position : scaledPoints) {
         FVertexID vertexId = meshDescription.CreateVertex();
         vertexPositions[vertexId] = position;
         vertexIds.Add(vertexId);

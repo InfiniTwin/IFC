@@ -21,9 +21,9 @@ public class IFC : ModuleRules
 			"Engine",
             "MeshDescription",
 			"StaticMeshDescription",
+			"MeshUtilitiesCommon",
             "RenderCore",
 			"RHI",
-			"MeshUtilitiesCommon",
             "Json",
 		});
 	}
