@@ -26,15 +26,17 @@ namespace IFC {
 
 	void ModelFeature::CreateObservers(flecs::world& world) {
 		world.observer<>("CreateISMOnIfcObjectCreation")
-			.with<IfcObject>().filter()
-			.with<Attribute>(flecs::Wildcard)
+			.with<IfcObject>()
 			.event(flecs::OnAdd)
 			.each([&](flecs::entity ifcObject) {
 			int32 meshId = INDEX_NONE;
-			ifcObject.target<Attribute>().children([&](flecs::entity attribute) {
-				if (attribute.has<Mesh>()) 
-					meshId = attribute.try_get<Mesh>()->Value;
-				});
+			int32_t index = 0;
+			while (flecs::entity attributes = ifcObject.target(world.try_get<AttributeRelationship>()->Value, index++)) {
+				attributes.children([&](flecs::entity attribute) {
+					if (attribute.has<Mesh>())
+						meshId = attribute.try_get<Mesh>()->Value;
+					});
+			}
 			if (meshId == INDEX_NONE) return;
 
 			FTransform worldTransform = FTransform::Identity;
