@@ -20,10 +20,10 @@ public:
 
 namespace IFC {
 #pragma region IFC
-	constexpr const char* DATA = "data";
-	constexpr const char* PATH = "path";
-	constexpr const char* INHERITS = "inherits";
-	constexpr const char* CHILDREN = "children";
+	constexpr const char* DATA_KEY = "data";
+	constexpr const char* PATH_KEY = "path";
+	constexpr const char* INHERITS_KEY = "inherits";
+	constexpr const char* CHILDREN_KEY = "children";
 	constexpr const TCHAR* PREFAB = TEXT("prefab ");
 
 	inline constexpr TCHAR TOKEN_NAME[] = TEXT("[NAME]");

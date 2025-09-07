@@ -54,6 +54,8 @@ namespace IFC {
 		LayerFeature::CreateQueries(world);
 
 		ModelFeature::CreateObservers(world);
+
+		AttributeFeature::Initialize(world);
 	}
 
 	FString FormatUUID(const FString& input) {
@@ -75,17 +77,12 @@ namespace IFC {
 
 	FString ToUUID(const FString& input) {
 		FString output = input;
-
-		// Match "ID" (case-sensitive) followed by exactly 32 hex chars.
-		// If you want case-insensitive "id", switch to: TEXT(R"((?i)ID([a-f0-9]{32}))")
 		const FRegexPattern idPattern(TEXT(R"(ID([a-fA-F0-9]{32}))"));
 		FRegexMatcher matcher(idPattern, output);
 
 		while (matcher.FindNext()) {
 			const FString fullMatch = matcher.GetCaptureGroup(0);
-			const FString rawUuid = matcher.GetCaptureGroup(1); // 32 hex chars
-
-			// Insert dashes via slices
+			const FString rawUuid = matcher.GetCaptureGroup(1);
 			const FString dashed = FString::Printf(
 				TEXT("%s-%s-%s-%s-%s"),
 				*rawUuid.Mid(0, 8),
@@ -95,7 +92,6 @@ namespace IFC {
 				*rawUuid.Mid(20, 12)
 			);
 
-			// Replace this specific match (keep IgnoreCase consistent with your forward function)
 			output = output.Replace(*fullMatch, *dashed, ESearchCase::IgnoreCase);
 		}
 
@@ -121,8 +117,8 @@ namespace IFC {
 		if (!owner.IsEmpty())
 			inheritIDs.Add(owner);
 
-		if (object.HasMember(INHERITS) && object[INHERITS].IsObject()) {
-			const rapidjson::Value& inherits = object[INHERITS];
+		if (object.HasMember(INHERITS_KEY) && object[INHERITS_KEY].IsObject()) {
+			const rapidjson::Value& inherits = object[INHERITS_KEY];
 			for (auto inherit = inherits.MemberBegin(); inherit != inherits.MemberEnd(); ++inherit) {
 				FString inheritance = IFC::Scope() + "." + UTF8_TO_TCHAR(inherit->value.GetString());
 				inheritIDs.Add(inheritance);
@@ -133,11 +129,11 @@ namespace IFC {
 	}
 
 	FString GetChildren(const rapidjson::Value& object, bool isPrefab) {
-		if (!object.HasMember(CHILDREN) || !object[CHILDREN].IsObject())
+		if (!object.HasMember(CHILDREN_KEY) || !object[CHILDREN_KEY].IsObject())
 			return TEXT("");
 
 		const FString owner = object[OWNER].GetString();
-		const rapidjson::Value& children = object[CHILDREN];
+		const rapidjson::Value& children = object[CHILDREN_KEY];
 
 		FString result;
 
@@ -169,30 +165,30 @@ namespace IFC {
 
 		// Step 1: Build object map and empty dependency list
 		for (auto& entry : dataArray.GetArray()) {
-			if (!entry.HasMember(PATH) || !entry[PATH].IsString())
+			if (!entry.HasMember(PATH_KEY) || !entry[PATH_KEY].IsString())
 				continue;
 
-			FString id = UTF8_TO_TCHAR(entry[PATH].GetString());
+			FString id = UTF8_TO_TCHAR(entry[PATH_KEY].GetString());
 			objectMap.Add(id, &entry);
 			dependencies.Add(id, {});
 		}
 
 		// Step 2: Fill in dependencies
 		for (auto& entry : dataArray.GetArray()) {
-			if (!entry.HasMember(PATH) || !entry[PATH].IsString())
+			if (!entry.HasMember(PATH_KEY) || !entry[PATH_KEY].IsString())
 				continue;
 
-			FString id = UTF8_TO_TCHAR(entry[PATH].GetString());
+			FString id = UTF8_TO_TCHAR(entry[PATH_KEY].GetString());
 
-			if (entry.HasMember(CHILDREN) && entry[CHILDREN].IsObject())
-				for (auto& child : entry[CHILDREN].GetObject()) {
+			if (entry.HasMember(CHILDREN_KEY) && entry[CHILDREN_KEY].IsObject())
+				for (auto& child : entry[CHILDREN_KEY].GetObject()) {
 					FString childId = UTF8_TO_TCHAR(child.value.GetString());
 					if (dependencies.Contains(id))
 						dependencies[id].Add(childId); // id depends on child
 				}
 
-			if (entry.HasMember(INHERITS) && entry[INHERITS].IsObject())
-				for (auto& inherit : entry[INHERITS].GetObject()) {
+			if (entry.HasMember(INHERITS_KEY) && entry[INHERITS_KEY].IsObject())
+				for (auto& inherit : entry[INHERITS_KEY].GetObject()) {
 					FString baseId = UTF8_TO_TCHAR(inherit.value.GetString());
 					if (dependencies.Contains(id))
 						dependencies[id].Add(baseId); // id depends on base
@@ -244,10 +240,10 @@ namespace IFC {
 
 		for (SizeType i = 0; i < inputArray.Size(); ++i) {
 			const rapidjson::Value& object = inputArray[i];
-			if (!object.IsObject() || !object.HasMember(PATH) || !object[PATH].IsString())
+			if (!object.IsObject() || !object.HasMember(PATH_KEY) || !object[PATH_KEY].IsString())
 				continue;
 
-			FString pathStr = UTF8_TO_TCHAR(object[PATH].GetString());
+			FString pathStr = UTF8_TO_TCHAR(object[PATH_KEY].GetString());
 
 			if (!mergedObjects.Contains(pathStr)) {
 				rapidjson::Value newObj(kObjectType);
@@ -256,9 +252,9 @@ namespace IFC {
 			}
 			else {
 				rapidjson::Value& existing = mergedObjects[pathStr];
-				MergeObjectMembers(existing, object, INHERITS, allocator);
-				MergeObjectMembers(existing, object, ATTRIBUTES, allocator);
-				MergeObjectMembers(existing, object, CHILDREN, allocator);
+				MergeObjectMembers(existing, object, INHERITS_KEY, allocator);
+				MergeObjectMembers(existing, object, ATTRIBUTES_KEY, allocator);
+				MergeObjectMembers(existing, object, CHILDREN_KEY, allocator);
 			}
 		}
 
@@ -277,21 +273,23 @@ namespace IFC {
 		TSet<FString> entities; // Find entities: non repeating ID
 		for (const rapidjson::Value* object : sorted) {
 			if (object && object->IsObject())
-				entities.Add(UTF8_TO_TCHAR((*object)[PATH].GetString()));
-			if ((*object).HasMember(CHILDREN) && (*object)[CHILDREN].IsObject())
-				for (auto& child : (*object)[CHILDREN].GetObject())
+				entities.Add(UTF8_TO_TCHAR((*object)[PATH_KEY].GetString()));
+			if ((*object).HasMember(CHILDREN_KEY) && (*object)[CHILDREN_KEY].IsObject())
+				for (auto& child : (*object)[CHILDREN_KEY].GetObject())
 					entities.Remove(UTF8_TO_TCHAR(child.value.GetString()));
-			if ((*object).HasMember(INHERITS) && (*object)[INHERITS].IsObject())
-				for (auto& inherit : (*object)[INHERITS].GetObject())
+			if ((*object).HasMember(INHERITS_KEY) && (*object)[INHERITS_KEY].IsObject())
+				for (auto& inherit : (*object)[INHERITS_KEY].GetObject())
 					entities.Remove(UTF8_TO_TCHAR(inherit.value.GetString()));
 		}
 
 		FString result;
+		FString attributeRelationship = ECS::NormalizedPath(world.try_get<AttributeRelationship>()->Value.path().c_str());
+
 		for (const rapidjson::Value* object : sorted) {
 			if (!object || !object->IsObject()) 
 				continue;
 
-			FString path = UTF8_TO_TCHAR((*object)[PATH].GetString());
+			FString path = UTF8_TO_TCHAR((*object)[PATH_KEY].GetString());
 			bool isPrefab = !entities.Contains(path);
 
 			TTuple<FString, FString> attributes = GetAttributes(world, *object, *path);
@@ -300,7 +298,7 @@ namespace IFC {
 
 			FString components = FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
 			if (isPrefab)
-				components += FString::Printf(TEXT("\t(%s, %s)\n"), UTF8_TO_TCHAR(COMPONENT(Attribute)), *attributes.Get<0>());
+				components += FString::Printf(TEXT("\t(%s, %s)\n"), *attributeRelationship, *attributes.Get<0>());
 			else {
 				components += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Root)));
 				components += FString::Printf(TEXT("\t%s: {\"%s\"}\n"), UTF8_TO_TCHAR(COMPONENT(Name)), *ToUUID(path));
@@ -321,14 +319,14 @@ namespace IFC {
 
 	void InjectOwner(rapidjson::Value& object, const FString& layerPath, rapidjson::Document::AllocatorType& allocator) {
 		auto ownerPath = GetOwnerPath(layerPath);
-		if (!object.HasMember(ATTRIBUTES) || !object[ATTRIBUTES].IsObject()) {
+		if (!object.HasMember(ATTRIBUTES_KEY) || !object[ATTRIBUTES_KEY].IsObject()) {
 			object.AddMember(rapidjson::Value(OWNER, allocator),
 				rapidjson::Value(TCHAR_TO_UTF8(*ownerPath), allocator),
 				allocator);
 			return;
 		}
 
-		rapidjson::Value& attributes = object[ATTRIBUTES];
+		rapidjson::Value& attributes = object[ATTRIBUTES_KEY];
 		TArray<rapidjson::Value> keys;
 		TArray<rapidjson::Value> values;
 
@@ -371,12 +369,12 @@ namespace IFC {
 				continue;
 			}
 
-			if (!doc.HasMember(DATA) || !doc[DATA].IsArray()) {
+			if (!doc.HasMember(DATA_KEY) || !doc[DATA_KEY].IsArray()) {
 				UE_LOG(LogTemp, Warning, TEXT(">>> Invalid Data: %s"), *filePath);
 				continue;
 			}
 
-			for (auto& entry : doc[DATA].GetArray()) {
+			for (auto& entry : doc[DATA_KEY].GetArray()) {
 				rapidjson::Value copy(entry, allocator);
 				InjectOwner(copy, ECS::NormalizedPath(layer.path().c_str()), allocator);
 				combinedData.PushBack(copy, allocator);

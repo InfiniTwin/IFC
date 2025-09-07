@@ -103,7 +103,7 @@ namespace IFC {
 				continue;
 			}
 
-			if (!doc.HasMember(DATA) || !doc[DATA].IsArray()) {
+			if (!doc.HasMember(DATA_KEY) || !doc[DATA_KEY].IsArray()) {
 				UE_LOG(LogTemp, Warning, TEXT(">>> Invalid Data: %s"), *path);
 				continue;
 			}

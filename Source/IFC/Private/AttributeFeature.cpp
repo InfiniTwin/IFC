@@ -15,6 +15,11 @@ namespace IFC {
 		using namespace ECS;
 		world.component<Attribute>().add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<Value>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
+		world.component<AttributeRelationship>().add(flecs::Singleton);
+	}
+
+	void AttributeFeature::Initialize(flecs::world& world) {
+		world.set<AttributeRelationship>({ world.entity() });
 	}
 
 	using namespace rapidjson;
@@ -135,15 +140,15 @@ namespace IFC {
 	}
 
 	TTuple<FString, FString> GetAttributes(flecs::world& world, const rapidjson::Value& object, const FString& objectPath) {
-		if (!object.HasMember(ATTRIBUTES) || !object[ATTRIBUTES].IsObject())
+		if (!object.HasMember(ATTRIBUTES_KEY) || !object[ATTRIBUTES_KEY].IsObject())
 			return MakeTuple(FString(), FString());
 
-		FString path = IFC::Scope() + "." + ATTRIBUTES + objectPath;
+		FString path = IFC::Scope() + "." + ATTRIBUTES_KEY + objectPath;
 
 		FString attributesEntity = FString::Printf(TEXT("%s {\n"), *path);
 		attributesEntity += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
 
-		const rapidjson::Value& attributes = object[ATTRIBUTES];
+		const rapidjson::Value& attributes = object[ATTRIBUTES_KEY];
 		for (auto attribute = attributes.MemberBegin(); attribute != attributes.MemberEnd(); ++attribute) {
 			FString attributeEntities = "";
 			bool processed = false;

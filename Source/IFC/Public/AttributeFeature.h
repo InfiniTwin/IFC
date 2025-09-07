@@ -9,14 +9,16 @@
 namespace IFC {
 	struct AttributeFeature {
 		static void CreateComponents(flecs::world& world);
+		static void Initialize(flecs::world& world);
 	};
 
-    constexpr const char* ATTRIBUTES = "attributes";
+	constexpr const char* ATTRIBUTES_KEY = "attributes";
 
 	inline constexpr TCHAR TOKEN_VALUE[] = TEXT("[VALUE]");
 
 	struct Attribute {};
 	struct Value { FString Value; };
+	struct AttributeRelationship { flecs::entity Value; };
 
 	constexpr const char* ATTRIBUTE_SEPARATOR = "::";
 
