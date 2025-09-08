@@ -30,14 +30,10 @@ int32 UMeshSubsystem::CreateMesh(UWorld* world, const TArray<FVector3f>& points,
     attributes.Register();
 
     TVertexAttributesRef<FVector3f> vertexPositions = attributes.GetVertexPositions();
-
     TArray<FVertexID> vertexIds;
 
-    TArray<FVector3f> scaledPoints = points;
-    for (FVector3f& point : scaledPoints) point *= 100.f;
-
-    vertexIds.Reserve(scaledPoints.Num());
-    for (const FVector3f& position : scaledPoints) {
+    vertexIds.Reserve(points.Num());
+    for (const FVector3f& position : points) {
         FVertexID vertexId = meshDescription.CreateVertex();
         vertexPositions[vertexId] = position;
         vertexIds.Add(vertexId);
