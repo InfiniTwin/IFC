@@ -12,19 +12,6 @@ namespace IFC {
 		static void CreateObservers(flecs::world& world);
 	};
 
-	constexpr const char* ATTRIBUTE_XFORMOP = "usd::xformop";
-	constexpr const char* ATTRIBUTE_TRANSFROM = "transform";
-
-	constexpr const char* ATTRIBUTE_MESH = "usd::usdgeom::mesh";
-	constexpr const char* MESH_INDICES = "faceVertexIndices";
-	constexpr const char* MESH_POINTS = "points";
-
-	constexpr const char* ATTRIBUTE_DIFFUSECOLOR = "bsi::ifc::presentation::diffuseColor";
-	constexpr const char* ATTRIBUTE_OPACITY = "bsi::ifc::presentation::opacity";
-	
-	constexpr const char* ATTRIBUTE_VISIBILITY = "usd::usdgeom::visibility";
-	constexpr const char* VISIBILITY_INVISIBLE = "invisible";
-
 	constexpr const float TO_CM = 100;
 
 	struct Position { FVector Value; };

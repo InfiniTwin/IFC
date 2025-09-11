@@ -23,59 +23,84 @@ int32 UMeshSubsystem::CreateMesh(UWorld* world, const TArray<FVector3f>& points,
     UStaticMesh* mesh = NewObject<UStaticMesh>(this, NAME_None, RF_Transient);
     if (!mesh) return INDEX_NONE;
 
-    mesh->SetMinLOD(0);
+    FMeshDescription md;
+    FStaticMeshAttributes a(md);
+    a.Register();
 
-    FMeshDescription meshDescription;
-    FStaticMeshAttributes attributes(meshDescription);
-    attributes.Register();
+    TVertexAttributesRef<FVector3f> pos = a.GetVertexPositions();
+    TVertexInstanceAttributesRef<FVector4f> vtxColors = a.GetVertexInstanceColors();
+    TVertexInstanceAttributesRef<FVector2f> uvs = a.GetVertexInstanceUVs();
+    if (uvs.GetNumChannels() < 1) uvs.SetNumChannels(1);
 
-    TVertexAttributesRef<FVector3f> vertexPositions = attributes.GetVertexPositions();
-    TArray<FVertexID> vertexIds;
+    TArray<FVertexID> vids; vids.Reserve(points.Num());
+    for (const FVector3f& p : points) { FVertexID v = md.CreateVertex(); pos[v] = p; vids.Add(v); }
 
-    vertexIds.Reserve(points.Num());
-    for (const FVector3f& position : points) {
-        FVertexID vertexId = meshDescription.CreateVertex();
-        vertexPositions[vertexId] = position;
-        vertexIds.Add(vertexId);
-    }
+    FPolygonGroupID pg = md.CreatePolygonGroup();
 
-    FPolygonGroupID polygonGroupId = meshDescription.CreatePolygonGroup();
+    TPolygonGroupAttributesRef<FName> pgSlotNames = a.GetPolygonGroupMaterialSlotNames();
+    const FName slotName = TEXT("Slot0");
+    pgSlotNames[pg] = slotName;
+
+    auto PlanarUV = [](const FVector3f& p0, const FVector3f& p1, const FVector3f& p2, FVector2f& uv0, FVector2f& uv1, FVector2f& uv2) {
+        const FVector3f e0 = p1 - p0;
+        const FVector3f e1 = p2 - p0;
+        const FVector3f n = FVector3f::CrossProduct(e0, e1);
+        const FVector3f an(FMath::Abs(n.X), FMath::Abs(n.Y), FMath::Abs(n.Z));
+        if (an.X >= an.Y && an.X >= an.Z) { uv0 = FVector2f(p0.Y, p0.Z); uv1 = FVector2f(p1.Y, p1.Z); uv2 = FVector2f(p2.Y, p2.Z); }
+        else if (an.Y >= an.X && an.Y >= an.Z) { uv0 = FVector2f(p0.X, p0.Z); uv1 = FVector2f(p1.X, p1.Z); uv2 = FVector2f(p2.X, p2.Z); }
+        else { uv0 = FVector2f(p0.X, p0.Y); uv1 = FVector2f(p1.X, p1.Y); uv2 = FVector2f(p2.X, p2.Y); }
+        };
 
     for (int32 i = 0; i < indices.Num(); i += 3) {
-        int32 i0 = indices[i + 0];
-        int32 i1 = indices[i + 1];
-        int32 i2 = indices[i + 2];
-        if (!vertexIds.IsValidIndex(i0) || !vertexIds.IsValidIndex(i1) || !vertexIds.IsValidIndex(i2)) continue;
+        const int32 i0 = indices[i + 0], i1 = indices[i + 1], i2 = indices[i + 2];
+        if (!vids.IsValidIndex(i0) || !vids.IsValidIndex(i1) || !vids.IsValidIndex(i2)) continue;
 
-        FVertexInstanceID vi0 = meshDescription.CreateVertexInstance(vertexIds[i0]);
-        FVertexInstanceID vi1 = meshDescription.CreateVertexInstance(vertexIds[i1]);
-        FVertexInstanceID vi2 = meshDescription.CreateVertexInstance(vertexIds[i2]);
+        const FVector3f p0 = pos[vids[i0]];
+        const FVector3f p1 = pos[vids[i1]];
+        const FVector3f p2 = pos[vids[i2]];
 
-        TArray<FVertexInstanceID> triangle;
-        triangle.Add(vi0);
-        triangle.Add(vi1);
-        triangle.Add(vi2);
+        FVertexInstanceID vi0 = md.CreateVertexInstance(vids[i0]);
+        FVertexInstanceID vi1 = md.CreateVertexInstance(vids[i1]);
+        FVertexInstanceID vi2 = md.CreateVertexInstance(vids[i2]);
 
-        meshDescription.CreatePolygon(polygonGroupId, triangle);
+        vtxColors[vi0] = FVector4f(1, 1, 1, 1);
+        vtxColors[vi1] = FVector4f(1, 1, 1, 1);
+        vtxColors[vi2] = FVector4f(1, 1, 1, 1);
+
+        FVector2f uv0, uv1, uv2;
+        PlanarUV(p0, p1, p2, uv0, uv1, uv2);
+        uvs.Set(vi0, 0, uv0);
+        uvs.Set(vi1, 0, uv1);
+        uvs.Set(vi2, 0, uv2);
+
+        TArray<FVertexInstanceID> tri; tri.Add(vi0); tri.Add(vi1); tri.Add(vi2);
+        md.CreatePolygon(pg, tri);
     }
 
-    FStaticMeshOperations::ComputeTriangleTangentsAndNormals(meshDescription);
+    FStaticMeshOperations::ComputeTriangleTangentsAndNormals(md);
+    FStaticMeshOperations::ComputeTangentsAndNormals(md, EComputeNTBsFlags::Normals | EComputeNTBsFlags::Tangents | EComputeNTBsFlags::UseMikkTSpace);
 
-    UStaticMesh::FBuildMeshDescriptionsParams buildParams;
-    buildParams.bAllowCpuAccess = true;
-    buildParams.bBuildSimpleCollision = false;
-    buildParams.bCommitMeshDescription = false;
-    buildParams.bFastBuild = true;
+    if (mesh->GetStaticMaterials().Num() == 0) mesh->GetStaticMaterials().Add(FStaticMaterial(UMaterial::GetDefaultMaterial(MD_Surface), TEXT("Slot0")));
 
-    TArray<const FMeshDescription*> meshDescriptions;
-    meshDescriptions.Add(&meshDescription);
-    if (!mesh->BuildFromMeshDescriptions(meshDescriptions, buildParams)) return INDEX_NONE;
+    UStaticMesh::FBuildMeshDescriptionsParams params;
+    params.bAllowCpuAccess = true;
+    params.bBuildSimpleCollision = false;
+    params.bCommitMeshDescription = false;
+    params.bFastBuild = true;
+    
+    if (mesh->GetStaticMaterials().Num() == 0) {
+        mesh->GetStaticMaterials().Reset();
+        mesh->GetStaticMaterials().Add(FStaticMaterial(UMaterial::GetDefaultMaterial(MD_Surface), slotName));
+    }
+    
+    TArray<const FMeshDescription*> mds; mds.Add(&md);
+    if (!mesh->BuildFromMeshDescriptions(mds, params)) return INDEX_NONE;
 
     mesh->InitResources();
     mesh->CalculateExtendedBounds();
 
-    uint64 hash = ComputeContentHash(points, indices);
-    return RegisterMesh(mesh, hash);
+    uint64 h = ComputeContentHash(points, indices);
+    return RegisterMesh(mesh, h);
 }
 
 int32 UMeshSubsystem::RegisterMesh(UStaticMesh* mesh, uint64 contentHash) {

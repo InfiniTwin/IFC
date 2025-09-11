@@ -11,6 +11,29 @@
 #include "ECS.h"
 
 namespace IFC {
+	int32 FindMaterial(flecs::world& world, flecs::entity ifcObject) {
+		auto attributeRelationship = world.try_get<AttributeRelationship>()->Value;
+
+		for (flecs::entity current = ifcObject; current.is_valid(); current = current.parent()) {
+			for (int32_t i = 0;; i++) {
+				flecs::entity attributes = current.target(attributeRelationship, i);
+				if (!attributes.is_valid())
+					break;
+
+				int32 matId = INDEX_NONE;
+				attributes.children([&](flecs::entity attribute) {
+					if (attribute.has<Material>())
+						matId = attribute.try_get<Material>()->Value;
+					});
+
+				if (matId != INDEX_NONE)
+					return matId;
+			}
+		}
+
+		return INDEX_NONE;
+	}
+
 	void ModelFeature::CreateComponents(flecs::world& world) {
 		using namespace ECS;
 
@@ -37,7 +60,12 @@ namespace IFC {
 						meshId = attribute.try_get<Mesh>()->Value;
 					});
 			}
-			if (meshId == INDEX_NONE) return;
+			if (meshId == INDEX_NONE) 
+				return;
+
+			int32 materialId = FindMaterial(world, ifcObject);
+			if (materialId == INDEX_NONE) 
+				return;
 
 			FTransform worldTransform = FTransform::Identity;
 			flecs::entity current = ifcObject;
@@ -64,6 +92,7 @@ namespace IFC {
 			ifcObject.set<ISM>({ uWorld->GetSubsystem<UISMSubsystem>()->CreateISM(
 				uWorld,
 				meshId,
+				materialId,
 				worldTransform.GetLocation(),
 				worldTransform.Rotator(),
 				worldTransform.GetScale3D())

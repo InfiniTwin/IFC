@@ -12,9 +12,28 @@ namespace IFC {
 		static void Initialize(flecs::world& world);
 	};
 
+	inline constexpr TCHAR TOKEN_VALUE[] = TEXT("[VALUE]");
+
 	constexpr const char* ATTRIBUTES_KEY = "attributes";
 
-	inline constexpr TCHAR TOKEN_VALUE[] = TEXT("[VALUE]");
+	constexpr const char* ATTRIBUTE_XFORMOP = "usd::xformop";
+	constexpr const char* ATTRIBUTE_TRANSFROM = "transform";
+
+	constexpr const char* ATTRIBUTE_MESH = "usd::usdgeom::mesh";
+	constexpr const char* MESH_INDICES = "faceVertexIndices";
+	constexpr const char* MESH_POINTS = "points";
+
+	constexpr const char* ATTRIBUTE_DIFFUSECOLOR = "bsi::ifc::presentation::diffuseColor";
+	constexpr const char* ATTRIBUTE_OPACITY = "bsi::ifc::presentation::opacity";
+
+	constexpr const char* ATTRIBUTE_VISIBILITY = "usd::usdgeom::visibility";
+	constexpr const char* VISIBILITY_VISIBILITY = "visibility";
+	constexpr const char* VISIBILITY_INVISIBLE = "invisible";
+
+	static const TSet<FString> ExcludeAttributes = {
+		TEXT("bsi::ifc::material"),
+		ATTRIBUTE_OPACITY,
+	};
 
 	struct Attribute {};
 	struct Value { FString Value; };

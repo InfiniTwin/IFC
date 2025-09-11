@@ -24,6 +24,13 @@ namespace IFC {
 
 	using namespace rapidjson;
 
+	bool HasAttribute(const TSet<FString>& attributes, const FString& name) {
+		for (const FString& attribute : attributes)
+			if (name.Contains(attribute))
+				return true;
+		return false;
+	}
+
 	FString JsonValueToString(const rapidjson::Value& value) {
 		rapidjson::StringBuffer buffer;
 		rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
@@ -158,11 +165,18 @@ namespace IFC {
 		}
 
 		if (name == ATTRIBUTE_DIFFUSECOLOR) {
+			float opacity = 1;
+			for (auto attribute = attributes.MemberBegin(); attribute != attributes.MemberEnd(); ++attribute)
+				if (FCStringAnsi::Strstr(attribute->name.GetString(), ATTRIBUTE_OPACITY) != nullptr) {
+					opacity = static_cast<float>(attribute->value.GetDouble());
+					break;
+				}
+
 			FVector4f rgba(
-				static_cast<float>(value[0].GetDouble()), 
+				static_cast<float>(value[0].GetDouble()),
 				static_cast<float>(value[1].GetDouble()),
 				static_cast<float>(value[2].GetDouble()),
-				attributes.HasMember(ATTRIBUTE_OPACITY) ? static_cast<float>(attributes[ATTRIBUTE_OPACITY].GetDouble()) : 1);
+				opacity);
 
 			return FString::Printf(
 				TEXT("\n\t\t%s: {%d}"),
@@ -171,8 +185,8 @@ namespace IFC {
 		}
 
 		if (name == ATTRIBUTE_VISIBILITY) {
-			FVector4f rgba(1, 1, 1,
-				value.HasMember(VISIBILITY_INVISIBLE) ? 0 : 1);
+			bool invisible = value.HasMember(VISIBILITY_VISIBILITY) && value[VISIBILITY_VISIBILITY] == VISIBILITY_INVISIBLE;
+			FVector4f rgba(1, 1, 1, invisible ? 0 : 1);
 
 			return FString::Printf(
 				TEXT("\n\t\t%s: {%d}"),
@@ -198,7 +212,8 @@ namespace IFC {
 			FString owner, name;
 			nameAndOwner.Split(ATTRIBUTE_SEPARATOR, &owner, &name);
 
-			if (name == ATTRIBUTE_OPACITY) continue;
+			if (HasAttribute(ExcludeAttributes, name))
+				continue;
 
 			FString attributeEntities = "";
 

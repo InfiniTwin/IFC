@@ -18,25 +18,15 @@ uint64 UMaterialSubsystem::MakeHash(UMaterialInterface* master, const FVector4f&
 	return h;
 }
 
-UMaterialInterface* UMaterialSubsystem::LoadMaterialByPath(const TCHAR* path) {
-	if (!path || !*path) return nullptr;
-	return Cast<UMaterialInterface>(StaticLoadObject(UMaterialInterface::StaticClass(), nullptr, path));
-}
-
 int32 UMaterialSubsystem::CreateMaterial(UWorld* world, const FVector4f& rgba) {
-	if (!world) return INDEX_NONE;
-	if (!MOpaque && MaterialOpaquePath) MOpaque = LoadMaterialByPath(MaterialOpaquePath);
-	if (!MTranslucent && MaterialTranslucentPath) MTranslucent = LoadMaterialByPath(MaterialTranslucentPath);
-	const bool opaque = rgba.W == 1.f;
+	const bool opaque = rgba.W > 0.99f;
 	UMaterialInterface* master = opaque ? MOpaque : MTranslucent;
-	if (!master) return INDEX_NONE;
 	const uint64 h = MakeHash(master, rgba, opaque);
 	if (const int32* found = HashToId.Find(h)) {
 		Retain(*found);
 		return *found;
 	}
 	UMaterialInstanceDynamic* mid = UMaterialInstanceDynamic::Create(master, world);
-	if (!mid) return INDEX_NONE;
 	mid->SetVectorParameterValue(baseColorParamName, FLinearColor(rgba.X, rgba.Y, rgba.Z, rgba.W));
 	return Register(mid, h);
 }
@@ -69,7 +59,7 @@ void UMaterialSubsystem::Retain(int32 id) {
 	entry->LastAccess = FPlatformTime::Seconds();
 }
 
-void UMaterialSubsystem::Release(int32 id, bool destroyNow) {
+void UMaterialSubsystem::Release(int32 id) {
 	MaterialEntryData* entry = EntryData.Find(id);
 	if (!entry) return;
 	--entry->RefCount;
@@ -83,23 +73,10 @@ void UMaterialSubsystem::Release(int32 id, bool destroyNow) {
 	if (const TObjectPtr<UMaterialInstanceDynamic>* ptr = Materials.Find(id)) mid = ptr->Get();
 	Materials.Remove(id);
 	if (hash != 0) HashToId.Remove(hash);
-	if (destroyNow && mid) mid->MarkAsGarbage();
+	if (mid) mid->MarkAsGarbage();
 }
 
-UMaterialInterface* UMaterialSubsystem::Get(int32 id) const {
+UMaterialInstanceDynamic* UMaterialSubsystem::Get(int32 id) const {
 	const TObjectPtr<UMaterialInstanceDynamic>* ptr = Materials.Find(id);
 	return ptr ? ptr->Get() : nullptr;
-}
-
-void UMaterialSubsystem::Touch(int32 id) {
-	if (MaterialEntryData* entry = EntryData.Find(id)) entry->LastAccess = FPlatformTime::Seconds();
-}
-
-MaterialStats UMaterialSubsystem::GetStats() const {
-	MaterialStats s;
-	s.Count = EntryData.Num();
-	int32 total = 0;
-	for (const auto& kv : EntryData) total += kv.Value.RefCount;
-	s.TotalRefCount = total;
-	return s;
 }
