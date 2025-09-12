@@ -77,16 +77,26 @@ bool UISMSubsystem::UpdateISMTransform(uint64 handle, const FTransform& transfor
 	return ism->UpdateInstanceTransform(instanceIndex, transform, worldSpace, markRenderStateDirty, teleport);
 }
 
-bool UISMSubsystem::SetISMCustomData(uint64 handle, int32 customIndex, float value, bool markRenderStateDirty) {
-	int32 meshId, instanceIndex;
+void UISMSubsystem::SetISMCustomData(uint64 handle, int32 customIndex, float value) {
+	int32 meshId = -1, instanceIndex = -1;
 	SplitIsmHandle(handle, meshId, instanceIndex);
-	UInstancedStaticMeshComponent* ism = nullptr;
-	if (TObjectPtr<UInstancedStaticMeshComponent>* found = ByMeshId.Find(meshId)) ism = found->Get();
-	if (!ism) return false;
-	if (customIndex < 0 || customIndex >= ism->NumCustomDataFloats) return false;
-	if (instanceIndex < 0 || instanceIndex >= ism->GetInstanceCount()) return false;
-	return ism->SetCustomDataValue(instanceIndex, customIndex, value, markRenderStateDirty);
+
+	UInstancedStaticMeshComponent* component = nullptr;
+	if (TObjectPtr<UInstancedStaticMeshComponent>* found = ByMeshId.Find(meshId))
+		component = found->Get();
+	if (!component) return;
+
+	const int32 count = component->GetInstanceCount();
+	if (instanceIndex < 0 || instanceIndex >= count) return;
+
+	if (component->NumCustomDataFloats <= customIndex) {
+		component->SetNumCustomDataFloats(customIndex + 1);
+		component->MarkRenderStateDirty();
+	}
+
+	component->SetCustomDataValue(instanceIndex, customIndex, value, true);
 }
+
 
 bool UISMSubsystem::SetISMNumCustomDataFloats(int32 meshId, int32 numFloats) {
 	UInstancedStaticMeshComponent* ism = nullptr;

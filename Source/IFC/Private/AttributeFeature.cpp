@@ -189,12 +189,14 @@ namespace IFC {
 		}
 
 		if (name == ATTRIBUTE_DIFFUSECOLOR) {
-			float opacity = 1;
-			for (auto attribute = attributes.MemberBegin(); attribute != attributes.MemberEnd(); ++attribute)
-				if (FCStringAnsi::Strstr(attribute->name.GetString(), ATTRIBUTE_OPACITY) != nullptr) {
-					opacity = static_cast<float>(attribute->value.GetDouble());
-					break;
-				}
+			float opacity = 0;
+			for (auto attributeMaterial = attributes.MemberBegin(); attributeMaterial != attributes.MemberEnd(); ++attributeMaterial)
+				if (FCStringAnsi::Strstr(attributeMaterial->name.GetString(), ATTRIBUTE_MATERIAL) != nullptr)
+					for (auto attributeOpacity = attributes.MemberBegin(); attributeOpacity != attributes.MemberEnd(); ++attributeOpacity)
+						if (FCStringAnsi::Strstr(attributeOpacity->name.GetString(), ATTRIBUTE_OPACITY) != nullptr) {
+							opacity = static_cast<float>(attributeOpacity->value.GetDouble());
+							break;
+						}
 
 			FVector4f rgba(
 				static_cast<float>(value[0].GetDouble()),

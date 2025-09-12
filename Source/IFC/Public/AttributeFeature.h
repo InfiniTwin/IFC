@@ -23,6 +23,7 @@ namespace IFC {
 	constexpr const char* MESH_INDICES = "faceVertexIndices";
 	constexpr const char* MESH_POINTS = "points";
 
+	constexpr const char* ATTRIBUTE_MATERIAL = "bsi::ifc::material";
 	constexpr const char* ATTRIBUTE_DIFFUSECOLOR = "bsi::ifc::presentation::diffuseColor";
 	constexpr const char* ATTRIBUTE_OPACITY = "bsi::ifc::presentation::opacity";
 
