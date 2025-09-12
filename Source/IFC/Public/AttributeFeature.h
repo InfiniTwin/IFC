@@ -31,7 +31,6 @@ namespace IFC {
 	constexpr const char* VISIBILITY_INVISIBLE = "invisible";
 
 	static const TSet<FString> ExcludeAttributes = {
-		TEXT("bsi::ifc::material"),
 		ATTRIBUTE_OPACITY,
 	};
 
