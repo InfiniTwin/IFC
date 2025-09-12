@@ -14,7 +14,7 @@ namespace IFC {
 	int32 FindMaterial(flecs::world& world, flecs::entity ifcObject) {
 		auto attributeRelationship = world.try_get<AttributeRelationship>()->Value;
 
-		for (flecs::entity current = ifcObject; current.is_valid(); current = current.parent()) {
+		for (flecs::entity current = ifcObject; current.is_valid(); current = current.parent())
 			for (int32_t i = 0;; i++) {
 				flecs::entity attributes = current.target(attributeRelationship, i);
 				if (!attributes.is_valid())
@@ -29,7 +29,6 @@ namespace IFC {
 				if (matId != INDEX_NONE)
 					return matId;
 			}
-		}
 
 		return INDEX_NONE;
 	}
@@ -52,36 +51,36 @@ namespace IFC {
 			.with<IfcObject>()
 			.event(flecs::OnAdd)
 			.each([&](flecs::entity ifcObject) {
+			auto attributeRelationship = world.try_get<AttributeRelationship>()->Value;
 			int32 meshId = INDEX_NONE;
-			int32_t index = 0;
-			while (flecs::entity attributes = ifcObject.target(world.try_get<AttributeRelationship>()->Value, index++)) {
+			int32_t i = 0;
+			while (flecs::entity attributes = ifcObject.target(attributeRelationship, i++)) {
 				attributes.children([&](flecs::entity attribute) {
 					if (attribute.has<Mesh>())
 						meshId = attribute.try_get<Mesh>()->Value;
 					});
 			}
-			if (meshId == INDEX_NONE) 
-				return;
 
 			int32 materialId = FindMaterial(world, ifcObject);
-			if (materialId == INDEX_NONE) 
-				return;
 
 			FTransform worldTransform = FTransform::Identity;
 			flecs::entity current = ifcObject;
-			while (current.is_alive()) {
-				FVector position = FVector::ZeroVector;
+			while (current.is_valid()) {
+				FVector	position = FVector::ZeroVector;
 				FRotator rotation = FRotator::ZeroRotator;
 				FVector scale = FVector::OneVector;
 
-				current.target<Attribute>().children([&](flecs::entity attribute) {
-					if (attribute.has<Position>())
-						position = attribute.try_get<Position>()->Value;
-					if (attribute.has<Rotation>())
-						rotation = attribute.try_get<Rotation>()->Value;
-					if (attribute.has<Scale>())
-						scale = attribute.try_get<Scale>()->Value;
-					});
+				i = 0;
+				while (flecs::entity attributes = current.target(attributeRelationship, i++)) {
+					attributes.children([&](flecs::entity attribute) {
+						if (attribute.has<Position>())
+							position = attribute.try_get<Position>()->Value;
+						if (attribute.has<Rotation>())
+							rotation = attribute.try_get<Rotation>()->Value;
+						if (attribute.has<Scale>())
+							scale = attribute.try_get<Scale>()->Value;
+						});
+				}
 
 				FTransform localTransform(rotation, position, scale);
 				worldTransform = localTransform * worldTransform;
