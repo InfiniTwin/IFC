@@ -107,7 +107,14 @@ namespace IFC {
 		return result;
 	}
 
-	FString ProcessAttribute(flecs::world& world, const rapidjson::Value& attributes, const rapidjson::Value& value, const FString& name) {
+	FString GetAttributeEntity(const FString& name, const rapidjson::Value& value) {
+		FString entity = FString::Printf(TEXT("\n\t\t%s"), UTF8_TO_TCHAR(COMPONENT(Attribute)));
+		entity += GetAttributeNameAndValue(name, value);
+		entity += GetAttributeNestedNameAndValue(value);
+		return entity;
+	}
+
+	FString ProcessAttribute(flecs::world& world, const FString& name, const rapidjson::Value& value, const rapidjson::Value& attributes) {
 		if (name == ATTRIBUTE_XFORMOP) {
 			const rapidjson::Value& transformData = value[ATTRIBUTE_TRANSFROM];
 			float values[4][4];
@@ -118,14 +125,14 @@ namespace IFC {
 			}
 
 			FTransform transform = ToTransform(values);
-			const FVector location = transform.GetLocation();
+			const FVector position = transform.GetLocation();
 			const FRotator rotation = transform.Rotator();
 			const FVector scale = transform.GetScale3D();
 
 			FString result = FString::Printf(
 				TEXT("\n\t\t%s: {{%.6f, %.6f, %.6f}}"),
 				UTF8_TO_TCHAR(COMPONENT(Position)),
-				location.X, location.Y, location.Z);
+				position.X, position.Y, position.Z);
 
 			result += FString::Printf(
 				TEXT("\n\t\t%s: {{%.6f, %.6f, %.6f}}"),
@@ -136,6 +143,23 @@ namespace IFC {
 				TEXT("\n\t\t%s: {{%.6f, %.6f, %.6f}}"),
 				UTF8_TO_TCHAR(COMPONENT(Scale)),
 				scale.X, scale.Y, scale.Z);
+
+			// Create Transform Attribute
+			rapidjson::Document transformAttribute(rapidjson::kObjectType);
+			auto& allocator = transformAttribute.GetAllocator();
+			rapidjson::Value transformObject(rapidjson::kObjectType);
+
+			auto addVector = [&](const char* key, float x, float y, float z) {
+				rapidjson::Value arr(rapidjson::kArrayType);
+				arr.PushBack(x, allocator).PushBack(y, allocator).PushBack(z, allocator);
+				transformObject.AddMember(rapidjson::Value(key, allocator), arr, allocator);
+				};
+
+			addVector(COMPONENT(Position), position.X, position.Y, position.Z);
+			addVector(COMPONENT(Rotation), rotation.Pitch, rotation.Yaw, rotation.Roll);
+			addVector(COMPONENT(Scale), scale.X, scale.Y, scale.Z);
+
+			result += GetAttributeEntity(ATTRIBUTE_TRANSFROM, transformObject);
 
 			return result;
 		}
@@ -219,16 +243,12 @@ namespace IFC {
 
 			const rapidjson::Value& value = attribute->value;
 
-			FString processedAttribute = ProcessAttribute(world, attributes, value, name);
+			FString processedAttribute = ProcessAttribute(world, name, value, attributes);
 
-			if (!processedAttribute.IsEmpty()) {
+			if (!processedAttribute.IsEmpty())
 				attributeEntities += processedAttribute;
-			}
-			else if (name != ATTRIBUTE_OPACITY) {
-				attributeEntities += FString::Printf(TEXT("\n\t\t%s"), UTF8_TO_TCHAR(COMPONENT(Attribute)));
-				attributeEntities += GetAttributeNameAndValue(name, value);
-				attributeEntities += GetAttributeNestedNameAndValue(value);
-			}
+			else
+				attributeEntities += GetAttributeEntity(name, value);
 
 			attributesEntity += FString::Printf(TEXT("\t_ : %s {%s\n\t}\n"),
 				*owner,
