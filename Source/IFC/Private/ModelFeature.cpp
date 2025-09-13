@@ -107,17 +107,29 @@ namespace IFC {
 			FPlane(values[3][0], values[3][1], values[3][2], values[3][3])
 		);
 
+		// Correct handedness and units
+		FVector location = matrix.GetOrigin();
+		location.Y = -location.Y;
+		location *= TO_CM;
+
 		FTransform transform(matrix);
-		transform.SetLocation(transform.GetLocation() * TO_CM);
+		transform.SetLocation(location);
+
 		return transform;
 	}
 
 	int32 CreateMesh(flecs::world& world, TArray<FVector3f> points, TArray<int32> indices) {
-		TArray<FVector3f> scaledPoints = points;
-		for (FVector3f& point : scaledPoints) point *= TO_CM;
-		
+		// Correct handedness and units
+		TArray<FVector3f> correctedPoints;
+		correctedPoints.Reserve(points.Num());
+		for (FVector3f point : points) {
+			FVector3f correctPoint(point.X, -point.Y, point.Z);
+			correctPoint *= TO_CM;
+			correctedPoints.Add(correctPoint);
+		}
+
 		UWorld* uWorld = static_cast<UWorld*>(world.get_ctx());
-		return uWorld->GetSubsystem<UMeshSubsystem>()->CreateMesh(uWorld, scaledPoints, indices);
+		return uWorld->GetSubsystem<UMeshSubsystem>()->CreateMesh(uWorld, correctedPoints, indices);
 	}
 
 	int32 CreateMaterial(flecs::world& world, const FVector4f& rgba) {

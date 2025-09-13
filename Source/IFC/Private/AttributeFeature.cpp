@@ -3,11 +3,9 @@
 
 #include "AttributeFeature.h"
 #include "IFC.h"
-#include "Assets.h"
 #include "ECS.h"
 #include "ModelFeature.h"
 #include "rapidjson/document.h"
-#include "rapidjson/error/en.h"
 #include "rapidjson/writer.h"
 
 namespace IFC {
