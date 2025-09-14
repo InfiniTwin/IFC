@@ -72,17 +72,21 @@ namespace IFC {
 		return out;
 	}
 
-	FString MakeId(const FString& id) {
-		return Clean(TEXT("ID_") + id);
-	}
-
 	FString CleanName(const FString& in) {
-		FString out = Clean(in);
+		FString out = in;
+		int32 colonIndex;
+		if (out.FindLastChar(TEXT(':'), colonIndex))
+			out = out.Mid(colonIndex + 1);
+		out = Clean(out);
 		for (const FString& symbol : {
 			TEXT("ID_"),
 			TEXT("_") })
 			out = out.Replace(*symbol, TEXT(" "));
 		return out;
+	}
+
+	FString MakeId(const FString& in) {
+		return Clean(TEXT("ID_") + in);
 	}
 
 	using namespace rapidjson;

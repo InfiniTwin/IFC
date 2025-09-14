@@ -30,8 +30,9 @@ namespace IFC {
 
 	using namespace rapidjson;
 
-	FString MakeId(const FString& id);
-	FString Clean(const FString& id);
+	FString Clean(const FString& in);
+	IFC_API FString CleanName(const FString& in);
+	FString MakeId(const FString& in);
 
 	IFC_API void LoadIfcData(flecs::world& world, const TArray<flecs::entity> layers);
 #pragma endregion
