@@ -62,6 +62,8 @@ namespace IFC {
 	FString Clean(const FString& in) {
 		FString out = in;
 		for (const FString& symbol : {
+			TEXT("$"),
+			TEXT("£"),
 			TEXT(" "),
 			TEXT("-"),
 			TEXT("("),
@@ -273,12 +275,14 @@ namespace IFC {
 
 			TTuple<FString, FString> attributes = GetAttributes(world, *object, *id);
 
-			result += attributes.Get<1>();
+			FString attributesEntity = attributes.Get<1>();
+			result += attributesEntity;
 
 			FString components = FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
-			if (isPrefab)
-				components += FString::Printf(TEXT("\t(%s, %s)\n"), *attributeRelationship, *attributes.Get<0>());
-			else {
+			if (isPrefab) {
+				if (!attributesEntity.IsEmpty())
+					components += FString::Printf(TEXT("\t(%s, %s)\n"), *attributeRelationship, *attributes.Get<0>());
+			} else {
 				components += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Root)));
 				components += FString::Printf(TEXT("\t%s: {\"%s\"}\n"), UTF8_TO_TCHAR(COMPONENT(Name)), *id);
 			}
