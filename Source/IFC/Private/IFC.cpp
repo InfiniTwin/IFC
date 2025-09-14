@@ -80,10 +80,8 @@ namespace IFC {
 		if (out.FindLastChar(TEXT(':'), colonIndex))
 			out = out.Mid(colonIndex + 1);
 		out = Clean(out);
-		for (const FString& symbol : {
-			TEXT("ID_"),
-			TEXT("_") })
-			out = out.Replace(*symbol, TEXT(" "));
+		out = out.Replace(TEXT("ID_"), TEXT(""));
+		out = out.Replace(TEXT("_"), TEXT(" "));
 		return out;
 	}
 
