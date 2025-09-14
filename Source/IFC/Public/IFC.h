@@ -30,8 +30,8 @@ namespace IFC {
 
 	using namespace rapidjson;
 
-	FString FormatUUID(const FString& input);
-	FString FormatName(const FString& fullName);
+	FString CleanId(const FString& id);
+	FString FormatName(const FString& name);
 
 	IFC_API void LoadIfcData(flecs::world& world, const TArray<flecs::entity> layers);
 #pragma endregion
@@ -41,11 +41,13 @@ namespace IFC {
 
 	IFC_API void Register(flecs::world& world);
 
+	struct Id { FString Value; };
 	struct Name { FString Value; };
 	struct IfcObject {};
-	struct QueryIfcData { flecs::query<> Value; };
 
 	struct Root {};
 	struct Branch {};
+
+	struct QueryIfcData { flecs::query<> Value; };
 #pragma endregion
 }

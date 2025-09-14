@@ -13,7 +13,6 @@ namespace IFC {
 		using namespace ECS;
 		world.component<Layer>();
 		world.component<Path>().member<FString>(VALUE);
-		world.component<Id>().member<FString>(VALUE);
 		world.component<IfcxVersion>().member<FString>(VALUE);
 		world.component<DataVersion>().member<FString>(VALUE);
 		world.component<Author>().member<FString>(VALUE);
@@ -42,7 +41,7 @@ namespace IFC {
 	}
 
 	FString ParseLayer(const rapidjson::Value& header, const FString path, const TArray<FString>& components) {
-		FString layer = IFC::Scope() + "." + IFC::FormatUUID(FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens));
+		FString layer = IFC::Scope() + "." + IFC::CleanId(FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens));
 
 		FString result = FString::Printf(TEXT("%s {\n"), *layer);
 
@@ -83,20 +82,20 @@ namespace IFC {
 					exists = true;
 					return;
 				}
-				});
+			});
 
 			if (exists)
 				continue;
 
 			auto jsonString = Assets::LoadTextFile(path);
-			auto formatted = FormatUUID(jsonString);
-			free(jsonString);
 
 			rapidjson::Document doc;
-			if (doc.Parse(TCHAR_TO_UTF8(*formatted)).HasParseError()) {
+			if (doc.Parse(jsonString).HasParseError()) {
+				free(jsonString);
 				UE_LOG(LogTemp, Error, TEXT(">>> Parse error in file %s: %s"), *path, *FString(GetParseError_En(doc.GetParseError())));
 				continue;
 			}
+			free(jsonString);
 
 			if (!doc.HasMember(HEADER) || !doc[HEADER].IsObject()) {
 				UE_LOG(LogTemp, Warning, TEXT(">>> Invalid Header: %s"), *path);

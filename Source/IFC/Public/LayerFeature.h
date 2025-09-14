@@ -16,7 +16,6 @@ namespace IFC {
 
 	struct Layer {};
 	struct Path { FString Value; };
-	struct Id { FString Value; };
 	struct IfcxVersion { FString Value; };
 	struct DataVersion { FString Value; };
 	struct Author { FString Value; };

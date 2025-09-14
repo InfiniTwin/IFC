@@ -34,6 +34,7 @@ namespace IFC {
 	void Register(flecs::world& world) {
 		using namespace ECS;
 
+		world.component<Id>().member<FString>(VALUE);
 		world.component<Name>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<IfcObject>().add(flecs::OnInstantiate, flecs::Inherit);
 
@@ -58,44 +59,8 @@ namespace IFC {
 		AttributeFeature::Initialize(world);
 	}
 
-	FString FormatUUID(const FString& input) {
-		FString output = input;
-
-		// Match UUIDs in the form xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-		const FRegexPattern uuidPattern(TEXT(R"(([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}))"));
-		FRegexMatcher matcher(uuidPattern, output);
-
-		while (matcher.FindNext()) {
-			FString fullMatch = matcher.GetCaptureGroup(0);
-			FString cleanedUuid = fullMatch.Replace(TEXT("-"), TEXT(""));
-			FString formattedUuid = FString::Printf(TEXT("ID%s"), *cleanedUuid);
-			output = output.Replace(*fullMatch, *formattedUuid, ESearchCase::IgnoreCase);
-		}
-
-		return output;
-	}
-
-	FString ToUUID(const FString& input) {
-		FString output = input;
-		const FRegexPattern idPattern(TEXT(R"(ID([a-fA-F0-9]{32}))"));
-		FRegexMatcher matcher(idPattern, output);
-
-		while (matcher.FindNext()) {
-			const FString fullMatch = matcher.GetCaptureGroup(0);
-			const FString rawUuid = matcher.GetCaptureGroup(1);
-			const FString dashed = FString::Printf(
-				TEXT("%s-%s-%s-%s-%s"),
-				*rawUuid.Mid(0, 8),
-				*rawUuid.Mid(8, 4),
-				*rawUuid.Mid(12, 4),
-				*rawUuid.Mid(16, 4),
-				*rawUuid.Mid(20, 12)
-			);
-
-			output = output.Replace(*fullMatch, *dashed, ESearchCase::IgnoreCase);
-		}
-
-		return output;
+	FString CleanId(const FString& id) {
+		return id.Replace(TEXT("-"), TEXT("_"));
 	}
 
 	FString FormatName(const FString& name) {
@@ -120,7 +85,7 @@ namespace IFC {
 		if (object.HasMember(INHERITS_KEY) && object[INHERITS_KEY].IsObject()) {
 			const rapidjson::Value& inherits = object[INHERITS_KEY];
 			for (auto inherit = inherits.MemberBegin(); inherit != inherits.MemberEnd(); ++inherit) {
-				FString inheritance = IFC::Scope() + "." + UTF8_TO_TCHAR(inherit->value.GetString());
+				FString inheritance = IFC::Scope() + "." + CleanId(UTF8_TO_TCHAR(inherit->value.GetString()));
 				inheritIDs.Add(inheritance);
 			}
 		}
@@ -146,7 +111,7 @@ namespace IFC {
 			const FString name = FormatName(UTF8_TO_TCHAR(child->name.GetString()));
 			auto nameComponent = FString::Printf(TEXT("%s: {\"%s\"}"), UTF8_TO_TCHAR(COMPONENT(Name)), *CleanName(name));
 
-			FString inheritance = IFC::Scope() + "." + UTF8_TO_TCHAR(child->value.GetString());
+			FString inheritance = IFC::Scope() + "." + CleanId(UTF8_TO_TCHAR(child->value.GetString()));
 
 			result += FString::Printf(TEXT("\t%s%s: %s, %s {%s}\n"),
 				isPrefab ? PREFAB : TEXT(""),
@@ -168,7 +133,7 @@ namespace IFC {
 			if (!entry.HasMember(PATH_KEY) || !entry[PATH_KEY].IsString())
 				continue;
 
-			FString id = UTF8_TO_TCHAR(entry[PATH_KEY].GetString());
+			FString id = CleanId(UTF8_TO_TCHAR(entry[PATH_KEY].GetString()));
 			objectMap.Add(id, &entry);
 			dependencies.Add(id, {});
 		}
@@ -178,18 +143,18 @@ namespace IFC {
 			if (!entry.HasMember(PATH_KEY) || !entry[PATH_KEY].IsString())
 				continue;
 
-			FString id = UTF8_TO_TCHAR(entry[PATH_KEY].GetString());
+			FString id = CleanId(UTF8_TO_TCHAR(entry[PATH_KEY].GetString()));
 
 			if (entry.HasMember(CHILDREN_KEY) && entry[CHILDREN_KEY].IsObject())
 				for (auto& child : entry[CHILDREN_KEY].GetObject()) {
-					FString childId = UTF8_TO_TCHAR(child.value.GetString());
+					FString childId = CleanId(UTF8_TO_TCHAR(child.value.GetString()));
 					if (dependencies.Contains(id))
 						dependencies[id].Add(childId); // id depends on child
 				}
 
 			if (entry.HasMember(INHERITS_KEY) && entry[INHERITS_KEY].IsObject())
 				for (auto& inherit : entry[INHERITS_KEY].GetObject()) {
-					FString baseId = UTF8_TO_TCHAR(inherit.value.GetString());
+					FString baseId = CleanId(UTF8_TO_TCHAR(inherit.value.GetString()));
 					if (dependencies.Contains(id))
 						dependencies[id].Add(baseId); // id depends on base
 				}
@@ -200,9 +165,9 @@ namespace IFC {
 		dependencies.GetKeys(sortedIds);
 
 		// Step 4: Sort them using correct lambda: return array of dependencies for given node
-		bool success = Algo::TopologicalSort(sortedIds, [&dependencies](const FString& id) -> const TArray<FString>&{
+		bool success = Algo::TopologicalSort(sortedIds, [&dependencies](const FString& id) -> const TArray<FString>& {
 			return dependencies[id]; // id depends on these
-			});
+		});
 
 		if (!success)
 			UE_LOG(LogTemp, Warning, TEXT(">>> Cyclic dependency detected in prefab graph."));
@@ -216,7 +181,7 @@ namespace IFC {
 		return sortedObjects;
 	}
 
-	void MergeObjectMembers (rapidjson::Value& target, const rapidjson::Value& source, const char* memberName, Document::AllocatorType& allocator) {
+	void MergeObjectMembers(rapidjson::Value& target, const rapidjson::Value& source, const char* memberName, Document::AllocatorType& allocator) {
 		if (!source.HasMember(memberName) || !source[memberName].IsObject())
 			return;
 
@@ -243,15 +208,14 @@ namespace IFC {
 			if (!object.IsObject() || !object.HasMember(PATH_KEY) || !object[PATH_KEY].IsString())
 				continue;
 
-			FString pathStr = UTF8_TO_TCHAR(object[PATH_KEY].GetString());
+			FString id = CleanId(UTF8_TO_TCHAR(object[PATH_KEY].GetString()));
 
-			if (!mergedObjects.Contains(pathStr)) {
+			if (!mergedObjects.Contains(id)) {
 				rapidjson::Value newObj(kObjectType);
 				newObj.CopyFrom(object, allocator);
-				mergedObjects.Add(pathStr, MoveTemp(newObj));
-			}
-			else {
-				rapidjson::Value& existing = mergedObjects[pathStr];
+				mergedObjects.Add(id, MoveTemp(newObj));
+			} else {
+				rapidjson::Value& existing = mergedObjects[id];
 				MergeObjectMembers(existing, object, INHERITS_KEY, allocator);
 				MergeObjectMembers(existing, object, ATTRIBUTES_KEY, allocator);
 				MergeObjectMembers(existing, object, CHILDREN_KEY, allocator);
@@ -273,26 +237,26 @@ namespace IFC {
 		TSet<FString> entities; // Find entities: non repeating ID
 		for (const rapidjson::Value* object : sorted) {
 			if (object && object->IsObject())
-				entities.Add(UTF8_TO_TCHAR((*object)[PATH_KEY].GetString()));
+				entities.Add(CleanId(UTF8_TO_TCHAR((*object)[PATH_KEY].GetString())));
 			if ((*object).HasMember(CHILDREN_KEY) && (*object)[CHILDREN_KEY].IsObject())
 				for (auto& child : (*object)[CHILDREN_KEY].GetObject())
-					entities.Remove(UTF8_TO_TCHAR(child.value.GetString()));
+					entities.Remove(CleanId(UTF8_TO_TCHAR(child.value.GetString())));
 			if ((*object).HasMember(INHERITS_KEY) && (*object)[INHERITS_KEY].IsObject())
 				for (auto& inherit : (*object)[INHERITS_KEY].GetObject())
-					entities.Remove(UTF8_TO_TCHAR(inherit.value.GetString()));
+					entities.Remove(CleanId(UTF8_TO_TCHAR(inherit.value.GetString())));
 		}
 
 		FString result;
 		FString attributeRelationship = ECS::NormalizedPath(world.try_get<AttributeRelationship>()->Value.path().c_str());
 
 		for (const rapidjson::Value* object : sorted) {
-			if (!object || !object->IsObject()) 
+			if (!object || !object->IsObject())
 				continue;
 
-			FString path = UTF8_TO_TCHAR((*object)[PATH_KEY].GetString());
-			bool isPrefab = !entities.Contains(path);
+			FString id = CleanId(UTF8_TO_TCHAR((*object)[PATH_KEY].GetString()));
+			bool isPrefab = !entities.Contains(id);
 
-			TTuple<FString, FString> attributes = GetAttributes(world, *object, *path);
+			TTuple<FString, FString> attributes = GetAttributes(world, *object, *id);
 
 			result += attributes.Get<1>();
 
@@ -301,7 +265,7 @@ namespace IFC {
 				components += FString::Printf(TEXT("\t(%s, %s)\n"), *attributeRelationship, *attributes.Get<0>());
 			else {
 				components += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Root)));
-				components += FString::Printf(TEXT("\t%s: {\"%s\"}\n"), UTF8_TO_TCHAR(COMPONENT(Name)), *ToUUID(path));
+				components += FString::Printf(TEXT("\t%s: {\"%s\"}\n"), UTF8_TO_TCHAR(COMPONENT(Name)), *id);
 			}
 
 			const FString owner = (*object)[OWNER].GetString();
@@ -309,7 +273,7 @@ namespace IFC {
 			result += FString::Printf(TEXT("%s%s.%s%s {\n%s%s}\n"),
 				isPrefab ? PREFAB : TEXT(""),
 				*IFC::Scope(),
-				*path,
+				*id,
 				*GetInheritances(*object, isPrefab ? TEXT("") : *owner),
 				*components,
 				*GetChildren(*object, isPrefab));
@@ -347,30 +311,30 @@ namespace IFC {
 		rapidjson::Document tempDoc;
 		rapidjson::Document::AllocatorType& allocator = tempDoc.GetAllocator();
 		rapidjson::Value combinedData(rapidjson::kArrayType);
-		
+
 		FString code = FString::Printf(TEXT("using %s\n"), *Scope());
 
 		FString layerNames;
 
 		for (const flecs::entity layer : layers) {
-			FString filePath = layer.try_get<Path>()->Value;
-			auto jsonString = Assets::LoadTextFile(filePath);
-			auto formatted = FormatUUID(jsonString);
-			free(jsonString);
+			FString path = layer.try_get<Path>()->Value;
+			auto jsonString = Assets::LoadTextFile(path);
 
 			rapidjson::Document doc;
-			if (doc.Parse(TCHAR_TO_UTF8(*formatted)).HasParseError()) {
-				UE_LOG(LogTemp, Error, TEXT(">>> Parse error in file %s: %s"), *filePath, *FString(GetParseError_En(doc.GetParseError())));
+			if (doc.Parse(jsonString).HasParseError()) {
+				free(jsonString);
+				UE_LOG(LogTemp, Error, TEXT(">>> Parse error in file %s: %s"), *path, *FString(GetParseError_En(doc.GetParseError())));
 				continue;
 			}
+			free(jsonString);
 
 			if (!doc.HasMember(HEADER) || !doc[HEADER].IsObject()) {
-				UE_LOG(LogTemp, Warning, TEXT(">>> Invalid Header: %s"), *filePath);
+				UE_LOG(LogTemp, Warning, TEXT(">>> Invalid Header: %s"), *path);
 				continue;
 			}
 
 			if (!doc.HasMember(DATA_KEY) || !doc[DATA_KEY].IsArray()) {
-				UE_LOG(LogTemp, Warning, TEXT(">>> Invalid Data: %s"), *filePath);
+				UE_LOG(LogTemp, Warning, TEXT(">>> Invalid Data: %s"), *path);
 				continue;
 			}
 
