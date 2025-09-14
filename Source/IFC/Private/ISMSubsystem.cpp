@@ -4,6 +4,7 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "GameFramework/Actor.h"
+#include "Logging/LogMacros.h"
 
 uint64 UISMSubsystem::MakeIsmHandle(int32 meshId, int32 instanceIndex) {
 	return (uint64(uint32(meshId)) << 32) | uint64(uint32(instanceIndex));
@@ -17,7 +18,7 @@ void UISMSubsystem::SplitIsmHandle(uint64 handle, int32& outMeshId, int32& outIn
 AActor* UISMSubsystem::EnsureRoot(UWorld* world) {
 	if (Root && Root->GetWorld() == world) return Root.Get();
 	FActorSpawnParameters params;
-	params.Name = FName(TEXT("ISMSubsystem_Root"));
+	params.Name = NAME_None;
 	params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	AActor* actor = world->SpawnActor<AActor>(FVector::ZeroVector, FRotator::ZeroRotator, params);
 	if (!actor) return nullptr;
@@ -107,26 +108,6 @@ bool UISMSubsystem::SetISMNumCustomDataFloats(int32 meshId, int32 numFloats) {
 	return true;
 }
 
-bool UISMSubsystem::RemoveISM(UWorld* world, uint64 handle, uint64& outMovedOldHandle) {
-	outMovedOldHandle = 0;
-	int32 meshId, index;
-	SplitIsmHandle(handle, meshId, index);
-	UInstancedStaticMeshComponent* ism = nullptr;
-	if (TObjectPtr<UInstancedStaticMeshComponent>* found = ByMeshId.Find(meshId)) ism = found->Get();
-	if (!ism) return false;
-	int32 lastIndex = ism->GetInstanceCount() - 1;
-	if (index < 0 || index > lastIndex) return false;
-	bool ok = ism->RemoveInstance(index);
-	if (!ok) return false;
-	if (index != lastIndex) outMovedOldHandle = MakeIsmHandle(meshId, lastIndex);
-	if (ism->GetInstanceCount() == 0) {
-		ByMeshId.Remove(meshId);
-		if (UMeshSubsystem* meshSub = world->GetSubsystem<UMeshSubsystem>()) meshSub->Release(meshId, false);
-		ism->DestroyComponent();
-	}
-	return true;
-}
-
 int32 UISMSubsystem::GetISMInstanceCount(int32 meshId) const {
 	const UInstancedStaticMeshComponent* ism = nullptr;
 	if (const TObjectPtr<UInstancedStaticMeshComponent>* found = ByMeshId.Find(meshId)) ism = found->Get();
@@ -147,5 +128,8 @@ void UISMSubsystem::DestroyAll(UWorld* world) {
 	TArray<int32> keys;
 	ByMeshId.GetKeys(keys);
 	for (int32 meshId : keys) DestroyGroup(world, meshId);
-	if (Root) { Root->Destroy(); Root = nullptr; }
+	if (Root) { 
+		Root->Destroy(); 
+		Root = nullptr;
+	}
 }

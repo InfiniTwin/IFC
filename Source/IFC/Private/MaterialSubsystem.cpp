@@ -1,11 +1,8 @@
-// MaterialSubsystem.cpp
 #include "MaterialSubsystem.h"
 #include "Engine/World.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "HAL/PlatformTime.h"
-#include "UObject/UObjectGlobals.h"
 #include "Hash/CityHash.h"
-#include "ISMSubsystem.h"
 
 static const FName baseColorParamName("Base Color");
 

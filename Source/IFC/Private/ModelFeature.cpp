@@ -7,7 +7,6 @@
 #include "MaterialSubsystem.h"
 #include "ISMSubsystem.h"
 #include "IFC.h"
-#include "Assets.h"
 #include "ECS.h"
 
 namespace IFC {
@@ -24,7 +23,7 @@ namespace IFC {
 				attributes.children([&](flecs::entity attribute) {
 					if (attribute.has<Material>())
 						matId = attribute.try_get<Material>()->Value;
-					});
+				});
 
 				if (matId != INDEX_NONE)
 					return matId;
@@ -42,7 +41,7 @@ namespace IFC {
 
 		world.component<Mesh>().member<int32>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<ISM>().member<uint64>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
-		
+
 		world.component<Material>().member<int32>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 	}
 
@@ -58,7 +57,7 @@ namespace IFC {
 				attributes.children([&](flecs::entity attribute) {
 					if (attribute.has<Mesh>())
 						meshId = attribute.try_get<Mesh>()->Value;
-					});
+				});
 			}
 
 			int32 materialId = FindMaterial(world, ifcObject);
@@ -79,7 +78,7 @@ namespace IFC {
 							rotation = attribute.try_get<Rotation>()->Value;
 						if (attribute.has<Scale>())
 							scale = attribute.try_get<Scale>()->Value;
-						});
+					});
 				}
 
 				FTransform localTransform(rotation, position, scale);
@@ -96,7 +95,22 @@ namespace IFC {
 				worldTransform.Rotator(),
 				worldTransform.GetScale3D())
 				});
-				});
+		});
+
+		world.observer<Material>("RemoveMaterial")
+			.event(flecs::OnRemove)
+			.each([&](flecs::entity entity, Material& material) {
+			static_cast<UWorld*>(world.get_ctx())
+				->GetSubsystem<UMaterialSubsystem>()->Release(material.Value);
+		});
+
+		world.observer<ISM>("RemoveISM") 
+			.event(flecs::OnRemove)
+			.each([&](flecs::entity entity, ISM& ism) {
+			UWorld* uWorld = static_cast<UWorld*>(world.get_ctx()); 
+			uWorld->GetSubsystem<UISMSubsystem>()->DestroyAll(uWorld);
+			//uWorld->GetSubsystem<UISMSubsystem>()->DestroyGroup(uWorld, ism.Value);
+		});
 	}
 
 	FTransform ToTransform(const float values[4][4]) {
