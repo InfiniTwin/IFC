@@ -4,7 +4,6 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "GameFramework/Actor.h"
-#include "Logging/LogMacros.h"
 
 uint64 UISMSubsystem::MakeIsmHandle(int32 meshId, int32 instanceIndex) {
 	return (uint64(uint32(meshId)) << 32) | uint64(uint32(instanceIndex));

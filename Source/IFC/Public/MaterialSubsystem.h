@@ -24,7 +24,7 @@ class UMaterialSubsystem : public UWorldSubsystem {
     }
 
 public:
-    int32 CreateMaterial(UWorld* world, const FVector4f& rgba);
+    int32 CreateMaterial(UWorld* world, const FVector4f& rgba, float offset);
     void Retain(int32 id);
     void Release(int32 id);
     UMaterialInstanceDynamic* Get(int32 id) const;

@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include "ECS.h"
 #include <flecs.h>
 #include "rapidjson/document.h"
 
@@ -30,6 +29,10 @@ namespace IFC {
 	constexpr const char* ATTRIBUTE_VISIBILITY = "usd::usdgeom::visibility";
 	constexpr const char* VISIBILITY_VISIBILITY = "visibility";
 	constexpr const char* VISIBILITY_INVISIBLE = "invisible";
+
+	constexpr const char* ATTRIBUTE_IFC_CLASS = "bsi::ifc::class";
+	constexpr const char* IFC_CLASS_CODE = "code";
+	constexpr const char* IFC_SPACE = "IfcSpace";
 
 	static const TSet<FString> ExcludeAttributes = {
 		ATTRIBUTE_OPACITY,

@@ -59,19 +59,30 @@ namespace IFC {
 		AttributeFeature::Initialize(world);
 	}
 
-	FString CleanId(const FString& id) {
-		return id.Replace(TEXT("-"), TEXT("_"));
+	FString Clean(const FString& in) {
+		FString out = in;
+		for (const FString& symbol : {
+			TEXT(" "),
+			TEXT("-"),
+			TEXT("("),
+			TEXT(")"),
+			TEXT(":"),
+			TEXT("::") })
+			out = out.Replace(*symbol, TEXT("_"));
+		return out;
 	}
 
-	FString FormatName(const FString& name) {
-		FString formatted = name;
-		for (const FString& symbol : { TEXT("::"), TEXT("-") })
-			formatted = formatted.Replace(*symbol, TEXT("_"));
-		return formatted;
+	FString MakeId(const FString& id) {
+		return Clean(TEXT("ID_") + id);
 	}
 
-	FString CleanName(const FString& name) {
-		return name.Replace(TEXT("_"), TEXT(" "));
+	FString CleanName(const FString& in) {
+		FString out = Clean(in);
+		for (const FString& symbol : {
+			TEXT("ID_"),
+			TEXT("_") })
+			out = out.Replace(*symbol, TEXT(" "));
+		return out;
 	}
 
 	using namespace rapidjson;
@@ -85,7 +96,7 @@ namespace IFC {
 		if (object.HasMember(INHERITS_KEY) && object[INHERITS_KEY].IsObject()) {
 			const rapidjson::Value& inherits = object[INHERITS_KEY];
 			for (auto inherit = inherits.MemberBegin(); inherit != inherits.MemberEnd(); ++inherit) {
-				FString inheritance = IFC::Scope() + "." + CleanId(UTF8_TO_TCHAR(inherit->value.GetString()));
+				FString inheritance = IFC::Scope() + "." + MakeId(UTF8_TO_TCHAR(inherit->value.GetString()));
 				inheritIDs.Add(inheritance);
 			}
 		}
@@ -108,10 +119,10 @@ namespace IFC {
 		}
 
 		for (auto child = children.MemberBegin(); child != children.MemberEnd(); ++child) {
-			const FString name = FormatName(UTF8_TO_TCHAR(child->name.GetString()));
+			const FString name = MakeId(UTF8_TO_TCHAR(child->name.GetString()));
 			auto nameComponent = FString::Printf(TEXT("%s: {\"%s\"}"), UTF8_TO_TCHAR(COMPONENT(Name)), *CleanName(name));
 
-			FString inheritance = IFC::Scope() + "." + CleanId(UTF8_TO_TCHAR(child->value.GetString()));
+			FString inheritance = IFC::Scope() + "." + MakeId(UTF8_TO_TCHAR(child->value.GetString()));
 
 			result += FString::Printf(TEXT("\t%s%s: %s, %s {%s}\n"),
 				isPrefab ? PREFAB : TEXT(""),
@@ -133,7 +144,7 @@ namespace IFC {
 			if (!entry.HasMember(PATH_KEY) || !entry[PATH_KEY].IsString())
 				continue;
 
-			FString id = CleanId(UTF8_TO_TCHAR(entry[PATH_KEY].GetString()));
+			FString id = MakeId(UTF8_TO_TCHAR(entry[PATH_KEY].GetString()));
 			objectMap.Add(id, &entry);
 			dependencies.Add(id, {});
 		}
@@ -143,18 +154,18 @@ namespace IFC {
 			if (!entry.HasMember(PATH_KEY) || !entry[PATH_KEY].IsString())
 				continue;
 
-			FString id = CleanId(UTF8_TO_TCHAR(entry[PATH_KEY].GetString()));
+			FString id = MakeId(UTF8_TO_TCHAR(entry[PATH_KEY].GetString()));
 
 			if (entry.HasMember(CHILDREN_KEY) && entry[CHILDREN_KEY].IsObject())
 				for (auto& child : entry[CHILDREN_KEY].GetObject()) {
-					FString childId = CleanId(UTF8_TO_TCHAR(child.value.GetString()));
+					FString childId = MakeId(UTF8_TO_TCHAR(child.value.GetString()));
 					if (dependencies.Contains(id))
 						dependencies[id].Add(childId); // id depends on child
 				}
 
 			if (entry.HasMember(INHERITS_KEY) && entry[INHERITS_KEY].IsObject())
 				for (auto& inherit : entry[INHERITS_KEY].GetObject()) {
-					FString baseId = CleanId(UTF8_TO_TCHAR(inherit.value.GetString()));
+					FString baseId = MakeId(UTF8_TO_TCHAR(inherit.value.GetString()));
 					if (dependencies.Contains(id))
 						dependencies[id].Add(baseId); // id depends on base
 				}
@@ -208,7 +219,7 @@ namespace IFC {
 			if (!object.IsObject() || !object.HasMember(PATH_KEY) || !object[PATH_KEY].IsString())
 				continue;
 
-			FString id = CleanId(UTF8_TO_TCHAR(object[PATH_KEY].GetString()));
+			FString id = MakeId(UTF8_TO_TCHAR(object[PATH_KEY].GetString()));
 
 			if (!mergedObjects.Contains(id)) {
 				rapidjson::Value newObj(kObjectType);
@@ -237,13 +248,13 @@ namespace IFC {
 		TSet<FString> entities; // Find entities: non repeating ID
 		for (const rapidjson::Value* object : sorted) {
 			if (object && object->IsObject())
-				entities.Add(CleanId(UTF8_TO_TCHAR((*object)[PATH_KEY].GetString())));
+				entities.Add(MakeId(UTF8_TO_TCHAR((*object)[PATH_KEY].GetString())));
 			if ((*object).HasMember(CHILDREN_KEY) && (*object)[CHILDREN_KEY].IsObject())
 				for (auto& child : (*object)[CHILDREN_KEY].GetObject())
-					entities.Remove(CleanId(UTF8_TO_TCHAR(child.value.GetString())));
+					entities.Remove(MakeId(UTF8_TO_TCHAR(child.value.GetString())));
 			if ((*object).HasMember(INHERITS_KEY) && (*object)[INHERITS_KEY].IsObject())
 				for (auto& inherit : (*object)[INHERITS_KEY].GetObject())
-					entities.Remove(CleanId(UTF8_TO_TCHAR(inherit.value.GetString())));
+					entities.Remove(MakeId(UTF8_TO_TCHAR(inherit.value.GetString())));
 		}
 
 		FString result;
@@ -253,7 +264,7 @@ namespace IFC {
 			if (!object || !object->IsObject())
 				continue;
 
-			FString id = CleanId(UTF8_TO_TCHAR((*object)[PATH_KEY].GetString()));
+			FString id = MakeId(UTF8_TO_TCHAR((*object)[PATH_KEY].GetString()));
 			bool isPrefab = !entities.Contains(id);
 
 			TTuple<FString, FString> attributes = GetAttributes(world, *object, *id);

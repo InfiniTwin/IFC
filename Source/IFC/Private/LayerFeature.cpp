@@ -41,7 +41,7 @@ namespace IFC {
 	}
 
 	FString ParseLayer(const rapidjson::Value& header, const FString path, const TArray<FString>& components) {
-		FString layer = IFC::Scope() + "." + IFC::CleanId(FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens));
+		FString layer = IFC::Scope() + "." + IFC::MakeId(FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens));
 
 		FString result = FString::Printf(TEXT("%s {\n"), *layer);
 
@@ -53,7 +53,7 @@ namespace IFC {
 		for (auto it = header.MemberBegin(); it != header.MemberEnd(); ++it) {
 			FString componentName = UTF8_TO_TCHAR(it->name.GetString());
 			componentName[0] = FChar::ToUpper(componentName[0]);
-			FString component = IFC::FormatName(componentName);
+			FString component = IFC::Clean(componentName);
 			FString value = FString::Printf(TEXT("\"%s\""), *FString(UTF8_TO_TCHAR(it->value.GetString())));
 			result += FString::Printf(TEXT("\t%s: {%s}\n"), *component, *value);
 		}

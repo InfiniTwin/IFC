@@ -4,7 +4,8 @@
 #include "HAL/PlatformTime.h"
 #include "Hash/CityHash.h"
 
-static const FName baseColorParamName("Base Color");
+static const FName baseColorParameter("Base Color");
+static const FName offsetParameter("Offset");
 
 uint64 UMaterialSubsystem::MakeHash(UMaterialInterface* master, const FVector4f& rgba, bool opaque) {
 	uint64 h = 1469598103934665603ull;
@@ -15,7 +16,7 @@ uint64 UMaterialSubsystem::MakeHash(UMaterialInterface* master, const FVector4f&
 	return h;
 }
 
-int32 UMaterialSubsystem::CreateMaterial(UWorld* world, const FVector4f& rgba) {
+int32 UMaterialSubsystem::CreateMaterial(UWorld* world, const FVector4f& rgba, float offset) {
 	const bool opaque = rgba.W > 0.99f;
 	UMaterialInterface* master = opaque ? MOpaque : MTranslucent;
 	const uint64 h = MakeHash(master, rgba, opaque);
@@ -24,7 +25,8 @@ int32 UMaterialSubsystem::CreateMaterial(UWorld* world, const FVector4f& rgba) {
 		return *found;
 	}
 	UMaterialInstanceDynamic* mid = UMaterialInstanceDynamic::Create(master, world);
-	mid->SetVectorParameterValue(baseColorParamName, FLinearColor(rgba.X, rgba.Y, rgba.Z, rgba.W));
+	mid->SetVectorParameterValue(baseColorParameter, FLinearColor(rgba.X, rgba.Y, rgba.Z, rgba.W));
+	mid->SetScalarParameterValue(offsetParameter, offset);
 	return Register(mid, h);
 }
 

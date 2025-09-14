@@ -2,9 +2,7 @@
 
 #pragma once
 
-#include "ECS.h"
 #include <flecs.h>
-#include "rapidjson/document.h"
 
 namespace IFC {
 	struct ModelFeature {
@@ -24,5 +22,5 @@ namespace IFC {
 
 	FTransform ToTransform(const float values[4][4]);
 	int32 CreateMesh(flecs::world& world, TArray<FVector3f> points, TArray<int32> indices);
-	int32 CreateMaterial(flecs::world& world, const FVector4f& rgba);
+	int32 CreateMaterial(flecs::world& world, const FVector4f& rgba, float offset);
 }

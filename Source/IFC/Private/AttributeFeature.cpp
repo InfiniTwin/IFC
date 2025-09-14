@@ -9,6 +9,10 @@
 #include "rapidjson/writer.h"
 
 namespace IFC {
+	float defaultOpacity = 1;
+	float defaultOffset = 0;
+	float ifcSpaceOffset = 0.01;
+
 	void AttributeFeature::CreateComponents(flecs::world& world) {
 		using namespace ECS;
 		world.component<Attribute>().add(flecs::OnInstantiate, flecs::Inherit);
@@ -151,7 +155,7 @@ namespace IFC {
 				rapidjson::Value arr(rapidjson::kArrayType);
 				arr.PushBack(x, allocator).PushBack(y, allocator).PushBack(z, allocator);
 				transformObject.AddMember(rapidjson::Value(key, allocator), arr, allocator);
-				};
+			};
 
 			addVector(COMPONENT(Position), position.X, position.Y, position.Z);
 			addVector(COMPONENT(Rotation), rotation.Pitch, rotation.Yaw, rotation.Roll);
@@ -187,16 +191,21 @@ namespace IFC {
 		}
 
 		if (name == ATTRIBUTE_DIFFUSECOLOR) {
-			float opacity = 0;
-			for (auto attributeMaterial = attributes.MemberBegin(); attributeMaterial != attributes.MemberEnd(); ++attributeMaterial)
-				if (FCStringAnsi::Strstr(attributeMaterial->name.GetString(), ATTRIBUTE_MATERIAL) != nullptr) {
-					opacity = 1;
-					for (auto attributeOpacity = attributes.MemberBegin(); attributeOpacity != attributes.MemberEnd(); ++attributeOpacity)
-						if (FCStringAnsi::Strstr(attributeOpacity->name.GetString(), ATTRIBUTE_OPACITY) != nullptr) {
-							opacity = static_cast<float>(attributeOpacity->value.GetDouble());
-							break;
-						}
+			float opacity = defaultOpacity;
+			float offset = defaultOffset;
+			for (auto attributeOpacity = attributes.MemberBegin(); attributeOpacity != attributes.MemberEnd(); ++attributeOpacity)
+				if (FCStringAnsi::Strstr(attributeOpacity->name.GetString(), ATTRIBUTE_OPACITY) != nullptr) {
+					opacity = static_cast<float>(attributeOpacity->value.GetDouble());
+					break;
 				}
+
+			for (auto attributeIfcClass = attributes.MemberBegin(); attributeIfcClass != attributes.MemberEnd(); ++attributeIfcClass) {
+				if (FCStringAnsi::Strstr(attributeIfcClass->name.GetString(), ATTRIBUTE_IFC_CLASS) != nullptr
+					&& FCStringAnsi::Strcmp(attributeIfcClass->value[IFC_CLASS_CODE].GetString(), IFC_SPACE) == 0) {
+					offset = ifcSpaceOffset;
+					break;
+				}
+			}
 
 			FVector4f rgba(
 				static_cast<float>(value[0].GetDouble()),
@@ -207,7 +216,7 @@ namespace IFC {
 			return FString::Printf(
 				TEXT("\n\t\t%s: {%d}"),
 				UTF8_TO_TCHAR(COMPONENT(Material)),
-				CreateMaterial(world, rgba));
+				CreateMaterial(world, rgba, offset));
 		}
 
 		if (name == ATTRIBUTE_VISIBILITY) {
@@ -217,7 +226,7 @@ namespace IFC {
 			return FString::Printf(
 				TEXT("\n\t\t%s: {%d}"),
 				UTF8_TO_TCHAR(COMPONENT(Material)),
-				CreateMaterial(world, rgba));
+				CreateMaterial(world, rgba, defaultOffset));
 		}
 
 		return "";

@@ -109,7 +109,6 @@ namespace IFC {
 			.each([&](flecs::entity entity, ISM& ism) {
 			UWorld* uWorld = static_cast<UWorld*>(world.get_ctx()); 
 			uWorld->GetSubsystem<UISMSubsystem>()->DestroyAll(uWorld);
-			//uWorld->GetSubsystem<UISMSubsystem>()->DestroyGroup(uWorld, ism.Value);
 		});
 	}
 
@@ -146,8 +145,8 @@ namespace IFC {
 		return uWorld->GetSubsystem<UMeshSubsystem>()->CreateMesh(uWorld, correctedPoints, indices);
 	}
 
-	int32 CreateMaterial(flecs::world& world, const FVector4f& rgba) {
+	int32 CreateMaterial(flecs::world& world, const FVector4f& rgba, float offset) {
 		UWorld* uWorld = static_cast<UWorld*>(world.get_ctx());
-		return uWorld->GetSubsystem<UMaterialSubsystem>()->CreateMaterial(uWorld, rgba);
+		return uWorld->GetSubsystem<UMaterialSubsystem>()->CreateMaterial(uWorld, rgba, offset);
 	}
 }
