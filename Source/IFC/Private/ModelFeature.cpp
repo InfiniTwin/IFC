@@ -115,10 +115,6 @@ namespace IFC {
 		});
 	}
 
-	void ModelFeature::Initialize(flecs::world& world) {
-
-	}
-
 	FTransform ToTransform(const float values[4][4]) {
 		FMatrix matrix(
 			FPlane(values[0][0], values[0][1], values[0][2], values[0][3]),

@@ -127,24 +127,39 @@ void UISMSubsystem::DestroyAll(UWorld* world) {
 	TArray<int32> keys;
 	ByMeshId.GetKeys(keys);
 	for (int32 meshId : keys) DestroyGroup(world, meshId);
-	if (Root) { 
-		Root->Destroy(); 
+	if (Root) {
+		Root->Destroy();
 		Root = nullptr;
 	}
 }
 
-FVector UISMSubsystem::GetCenter(uint64 id) {
+FBoxSphereBounds UISMSubsystem::GetBounds(uint64 id) {
 	int32 meshId, instanceIndex;
 	SplitIsmHandle(id, meshId, instanceIndex);
 
 	UInstancedStaticMeshComponent* ism = nullptr;
 	if (TObjectPtr<UInstancedStaticMeshComponent>* found = ByMeshId.Find(meshId))
 		ism = found->Get();
-	if (!ism) return FVector::ZeroVector;
+	if (!ism)
+		return FBoxSphereBounds(ForceInit);
 
-	FTransform transform;
-	if (!ism->GetInstanceTransform(instanceIndex, transform, true))
-		return FVector::ZeroVector;
+	const int32 count = ism->GetInstanceCount();
+	if (instanceIndex < 0 || instanceIndex >= count)
+		return FBoxSphereBounds(ForceInit);
 
-	return transform.GetLocation();
+	FTransform inst;
+	if (!ism->GetInstanceTransform(instanceIndex, inst, true))
+		return FBoxSphereBounds(ForceInit);
+
+	const UStaticMesh* mesh = ism->GetStaticMesh();
+	if (!mesh)
+		return FBoxSphereBounds(ForceInit);
+
+	const FBoxSphereBounds meshBounds = mesh->GetBounds();
+	const FVector absScale = inst.GetScale3D().GetAbs();
+	const FVector center = inst.GetLocation() + (meshBounds.Origin * absScale);
+	const FVector extent = meshBounds.BoxExtent * absScale;
+	const float radius = extent.Size();
+
+	return FBoxSphereBounds(center, extent, radius);
 }

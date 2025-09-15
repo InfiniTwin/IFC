@@ -8,7 +8,6 @@ namespace IFC {
 	struct ModelFeature {
 		static void CreateComponents(flecs::world& world);
 		static void CreateObservers(flecs::world& world);
-		static void Initialize(flecs::world& world);
 	};
 
 	constexpr const float TO_CM = 100;

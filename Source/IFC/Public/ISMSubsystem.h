@@ -21,7 +21,7 @@ public:
     int32 GetISMInstanceCount(int32 meshId) const;
     void DestroyGroup(UWorld* world, int32 meshId);
     void DestroyAll(UWorld* world);
-    IFC_API FVector GetCenter(uint64 id);
+    IFC_API FBoxSphereBounds GetBounds(uint64 id);
 private:
     AActor* EnsureRoot(UWorld* world);
     UInstancedStaticMeshComponent* GetOrCreateIsm(UWorld* world, int32 meshId, int32 materialId);
