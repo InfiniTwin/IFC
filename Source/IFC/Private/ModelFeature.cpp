@@ -53,14 +53,17 @@ namespace IFC {
 			auto attributeRelationship = world.try_get<AttributeRelationship>()->Value;
 			int32 meshId = INDEX_NONE;
 			int32_t i = 0;
-			while (flecs::entity attributes = ifcObject.target(attributeRelationship, i++)) {
+			while (flecs::entity attributes = ifcObject.target(attributeRelationship, i++))
 				attributes.children([&](flecs::entity attribute) {
-					if (attribute.has<Mesh>())
-						meshId = attribute.try_get<Mesh>()->Value;
-				});
-			}
+				if (attribute.has<Mesh>())
+					meshId = attribute.try_get<Mesh>()->Value;
+			});
+			if (meshId == INDEX_NONE)
+				return;
 
 			int32 materialId = FindMaterial(world, ifcObject);
+			if (materialId == INDEX_NONE)
+				return;
 
 			FTransform worldTransform = FTransform::Identity;
 			flecs::entity current = ifcObject;
@@ -104,12 +107,16 @@ namespace IFC {
 				->GetSubsystem<UMaterialSubsystem>()->Release(material.Value);
 		});
 
-		world.observer<ISM>("RemoveISM") 
+		world.observer<ISM>("RemoveISM")
 			.event(flecs::OnRemove)
 			.each([&](flecs::entity entity, ISM& ism) {
-			UWorld* uWorld = static_cast<UWorld*>(world.get_ctx()); 
+			UWorld* uWorld = static_cast<UWorld*>(world.get_ctx());
 			uWorld->GetSubsystem<UISMSubsystem>()->DestroyAll(uWorld);
 		});
+	}
+
+	void ModelFeature::Initialize(flecs::world& world) {
+
 	}
 
 	FTransform ToTransform(const float values[4][4]) {

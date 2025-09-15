@@ -9,9 +9,9 @@ uint64 UISMSubsystem::MakeIsmHandle(int32 meshId, int32 instanceIndex) {
 	return (uint64(uint32(meshId)) << 32) | uint64(uint32(instanceIndex));
 }
 
-void UISMSubsystem::SplitIsmHandle(uint64 handle, int32& outMeshId, int32& outInstanceIndex) {
-	outMeshId = int32(uint32(handle >> 32));
-	outInstanceIndex = int32(uint32(handle));
+void UISMSubsystem::SplitIsmHandle(uint64 id, int32& outMeshId, int32& outInstanceIndex) {
+	outMeshId = int32(uint32(id >> 32));
+	outInstanceIndex = int32(uint32(id));
 }
 
 AActor* UISMSubsystem::EnsureRoot(UWorld* world) {
@@ -77,9 +77,9 @@ bool UISMSubsystem::UpdateISMTransform(uint64 handle, const FTransform& transfor
 	return ism->UpdateInstanceTransform(instanceIndex, transform, worldSpace, markRenderStateDirty, teleport);
 }
 
-void UISMSubsystem::SetISMCustomData(uint64 handle, int32 customIndex, float value) {
+void UISMSubsystem::SetISMCustomData(uint64 id, int32 customIndex, float value) {
 	int32 meshId = -1, instanceIndex = -1;
-	SplitIsmHandle(handle, meshId, instanceIndex);
+	SplitIsmHandle(id, meshId, instanceIndex);
 
 	UInstancedStaticMeshComponent* component = nullptr;
 	if (TObjectPtr<UInstancedStaticMeshComponent>* found = ByMeshId.Find(meshId))
@@ -131,4 +131,20 @@ void UISMSubsystem::DestroyAll(UWorld* world) {
 		Root->Destroy(); 
 		Root = nullptr;
 	}
+}
+
+FVector UISMSubsystem::GetCenter(uint64 id) {
+	int32 meshId, instanceIndex;
+	SplitIsmHandle(id, meshId, instanceIndex);
+
+	UInstancedStaticMeshComponent* ism = nullptr;
+	if (TObjectPtr<UInstancedStaticMeshComponent>* found = ByMeshId.Find(meshId))
+		ism = found->Get();
+	if (!ism) return FVector::ZeroVector;
+
+	FTransform transform;
+	if (!ism->GetInstanceTransform(instanceIndex, transform, true))
+		return FVector::ZeroVector;
+
+	return transform.GetLocation();
 }

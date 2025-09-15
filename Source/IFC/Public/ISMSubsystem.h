@@ -13,15 +13,15 @@ public:
     IFC_API void SetISMCustomData(uint64 handle, int32 customIndex, float value);
 
     static uint64 MakeIsmHandle(int32 meshId, int32 instanceIndex);
-    static void SplitIsmHandle(uint64 handle, int32& outMeshId, int32& outInstanceIndex);
+    static void SplitIsmHandle(uint64 id, int32& outMeshId, int32& outInstanceIndex);
 
     uint64 CreateISM(UWorld* world, int32 meshId, int32 materialId, const FVector& position, const FRotator& rotation, const FVector& scale);
-    bool UpdateISMTransform(uint64 handle, const FTransform& transform, bool worldSpace = true, bool markRenderStateDirty = true, bool teleport = true);
+    bool UpdateISMTransform(uint64 id, const FTransform& transform, bool worldSpace = true, bool markRenderStateDirty = true, bool teleport = true);
     bool SetISMNumCustomDataFloats(int32 meshId, int32 numFloats);
     int32 GetISMInstanceCount(int32 meshId) const;
     void DestroyGroup(UWorld* world, int32 meshId);
     void DestroyAll(UWorld* world);
-
+    IFC_API FVector GetCenter(uint64 id);
 private:
     AActor* EnsureRoot(UWorld* world);
     UInstancedStaticMeshComponent* GetOrCreateIsm(UWorld* world, int32 meshId, int32 materialId);
