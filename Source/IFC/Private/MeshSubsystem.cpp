@@ -31,6 +31,7 @@ int32 UMeshSubsystem::CreateMesh(UWorld* world, const TArray<FVector3f>& points,
     TVertexInstanceAttributesRef<FVector4f> vtxColors = a.GetVertexInstanceColors();
     TVertexInstanceAttributesRef<FVector2f> uvs = a.GetVertexInstanceUVs();
     if (uvs.GetNumChannels() < 1) uvs.SetNumChannels(1);
+    TVertexInstanceAttributesRef<FVector3f> normals = a.GetVertexInstanceNormals();
 
     TArray<FVertexID> vids; vids.Reserve(points.Num());
     for (const FVector3f& p : points) { FVertexID v = md.CreateVertex(); pos[v] = p; vids.Add(v); }
@@ -73,12 +74,20 @@ int32 UMeshSubsystem::CreateMesh(UWorld* world, const TArray<FVector3f>& points,
         uvs.Set(vi1, 0, uv1);
         uvs.Set(vi2, 0, uv2);
 
+        const FVector3f e0 = p1 - p0;
+        const FVector3f e1 = p2 - p0;
+        FVector3f faceN = FVector3f::CrossProduct(e0, e1);
+        if (!faceN.Normalize()) faceN = FVector3f(0, 0, 1);
+        normals[vi0] = faceN;
+        normals[vi1] = faceN;
+        normals[vi2] = faceN;
+
         TArray<FVertexInstanceID> tri; tri.Add(vi0); tri.Add(vi1); tri.Add(vi2);
         md.CreatePolygon(pg, tri);
     }
 
     FStaticMeshOperations::ComputeTriangleTangentsAndNormals(md);
-    FStaticMeshOperations::ComputeTangentsAndNormals(md, EComputeNTBsFlags::Normals | EComputeNTBsFlags::Tangents | EComputeNTBsFlags::UseMikkTSpace);
+    FStaticMeshOperations::ComputeTangentsAndNormals(md, EComputeNTBsFlags::Tangents | EComputeNTBsFlags::UseMikkTSpace);
 
     if (mesh->GetStaticMaterials().Num() == 0) mesh->GetStaticMaterials().Add(FStaticMaterial(UMaterial::GetDefaultMaterial(MD_Surface), TEXT("Slot0")));
 
