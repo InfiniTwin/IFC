@@ -20,9 +20,11 @@ namespace IFC {
 		world.component<Attribute>().add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<Value>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 
-		world.component<RelatedElement>();
 		world.component<SpaceBoundary>();
+		world.component<RelatedElement>();
 		world.component<RelatingSpace>();
+
+		world.component<Alignment>();
 	}
 
 	void AttributeFeature::Initialize(flecs::world& world) {
@@ -238,8 +240,8 @@ namespace IFC {
 		}
 
 		if (name == ATTRIBUTE_SPACE_BOUNDARY) {
-			const rapidjson::Value* relatedElement = &value[ATTRIBUTE_RELATED_ELEMENT];
-			const rapidjson::Value* relatingSpace = &value[ATTRIBUTE_RELATING_SPACE];
+			const rapidjson::Value* relatedElement = &value[RELATED_ELEMENT];
+			const rapidjson::Value* relatingSpace = &value[RELATING_SPACE];
 
 			FString result = FString::Printf(TEXT("\n\t\t%s"), UTF8_TO_TCHAR(COMPONENT(SpaceBoundary)));
 
@@ -316,8 +318,8 @@ namespace IFC {
 			}
 		}
 
-		attributes += "\n}\n";
-		relationships += "\n}\n";
+		attributes += "}\n";
+		relationships += "}\n";
 
 		return MakeTuple(path, attributes, hasRelationships ? relationships : "");
 	}

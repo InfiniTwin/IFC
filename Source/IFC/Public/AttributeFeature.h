@@ -34,9 +34,11 @@ namespace IFC {
 	constexpr const char* VISIBILITY_INVISIBLE = "invisible";
 
 	// Relationships
-	constexpr const char* ATTRIBUTE_RELATED_ELEMENT = "relatedelement";
 	constexpr const char* ATTRIBUTE_SPACE_BOUNDARY = "bsi::ifc::spaceBoundary";
-	constexpr const char* ATTRIBUTE_RELATING_SPACE = "relatingspace";
+	constexpr const char* RELATED_ELEMENT = "relatedelement";
+	constexpr const char* RELATING_SPACE = "relatingspace";
+	
+	constexpr const char* ATTRIBUTE_ALIGNMENT = "bsi::ifc::alignment";
 
 
 	static const TSet<FString> ExcludeAttributes = {
@@ -48,9 +50,11 @@ namespace IFC {
 	struct Attribute {};
 	struct Value { FString Value; };
 
-	struct RelatedElement { flecs::entity Value; };
 	struct SpaceBoundary {};
+	struct RelatedElement { flecs::entity Value; };
 	struct RelatingSpace { flecs::entity Value; };
+
+	struct Alignment { flecs::entity Value; };
 
 	constexpr const char* ATTRIBUTE_SEPARATOR = "::";
 

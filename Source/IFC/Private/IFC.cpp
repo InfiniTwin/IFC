@@ -272,6 +272,8 @@ namespace IFC {
 				continue;
 
 			FString id = MakeId(UTF8_TO_TCHAR((*object)[PATH_KEY].GetString()));
+			const FString owner = (*object)[OWNER].GetString();
+
 			bool isPrefab = !entities.Contains(id);
 
 			TTuple<FString, FString, FString> data = GetAttributes(world, *object, *id);
@@ -287,10 +289,11 @@ namespace IFC {
 					components += FString::Printf(TEXT("\t(%s, %s)\n"), *attributeRelationship, *data.Get<0>());
 			} else {
 				components += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Root)));
-				components += FString::Printf(TEXT("\t%s: {\"%s\"}\n"), UTF8_TO_TCHAR(COMPONENT(Name)), *id);
+				world.try_get<QueryLayers>()->Value.each([&owner, &components](flecs::entity layer) {
+					if (owner.Contains(UTF8_TO_TCHAR(layer.name().c_str())))
+						components += FString::Printf(TEXT("\t%s: {\"%s\"}\n"), UTF8_TO_TCHAR(COMPONENT(Name)), *CleanLayerName(layer.try_get<Id>()->Value));
+				});
 			}
-
-			const FString owner = (*object)[OWNER].GetString();
 
 			objects += FString::Printf(TEXT("%s%s.%s%s {\n%s%s}\n"),
 				isPrefab ? PREFAB : TEXT(""),

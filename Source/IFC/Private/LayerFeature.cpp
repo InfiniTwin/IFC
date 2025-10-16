@@ -112,4 +112,18 @@ namespace IFC {
 
 		ECS::RunCode(world, paths[0], code);
 	}
+
+	FString CleanLayerName(const FString& id) {
+		FString clean = id;
+		// Remove everything before the last "/"
+		int32 slashIndex;
+		if (clean.FindLastChar('/', slashIndex))
+			clean = clean.Mid(slashIndex + 1);
+		// Remove everything after the last "."
+		int32 dotIndex;
+		if (clean.FindLastChar('.', dotIndex))
+			clean = clean.Left(dotIndex);
+
+		return clean;
+	}
 }

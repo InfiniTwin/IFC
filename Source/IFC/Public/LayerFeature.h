@@ -26,6 +26,7 @@ namespace IFC {
 	struct QueryLayers { flecs::query<> Value; };
 
 	FString GetOwnerPath(const FString& layerPath);
+	IFC_API FString CleanLayerName(const FString& in);
 
 	IFC_API void AddLayers(flecs::world& world, const TArray<FString>& paths, const TArray<FString>& components);
 }
