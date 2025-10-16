@@ -15,9 +15,14 @@ namespace IFC {
 
 	void AttributeFeature::CreateComponents(flecs::world& world) {
 		using namespace ECS;
+		world.component<AttributeRelationship>().add(flecs::Singleton);
+
 		world.component<Attribute>().add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<Value>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
-		world.component<AttributeRelationship>().add(flecs::Singleton);
+
+		world.component<RelatedElement>();
+		world.component<SpaceBoundary>();
+		world.component<RelatingSpace>();
 	}
 
 	void AttributeFeature::Initialize(flecs::world& world) {
@@ -116,7 +121,7 @@ namespace IFC {
 		return entity;
 	}
 
-	FString ProcessAttribute(flecs::world& world, const FString& name, const rapidjson::Value& value, const rapidjson::Value& attributes) {
+	TTuple<FString, bool> ProcessAttribute(flecs::world& world, const FString& name, const rapidjson::Value& value, const rapidjson::Value& attributes) {
 		if (name == ATTRIBUTE_XFORMOP) {
 			const rapidjson::Value& transformData = value[ATTRIBUTE_TRANSFROM];
 			float values[4][4];
@@ -163,7 +168,7 @@ namespace IFC {
 
 			result += GetAttributeEntity(ATTRIBUTE_TRANSFROM, transformObject);
 
-			return result;
+			return MakeTuple(result, false);
 		}
 
 		if (name == ATTRIBUTE_MESH) {
@@ -184,10 +189,11 @@ namespace IFC {
 					static_cast<float>(point[1].GetDouble()),
 					static_cast<float>(point[2].GetDouble())));
 
-			return FString::Printf(
+			return MakeTuple(FString::Printf(
 				TEXT("\n\t\t%s: {%d}"),
 				UTF8_TO_TCHAR(COMPONENT(Mesh)),
-				CreateMesh(world, points, indices));
+				CreateMesh(world, points, indices)),
+				false);
 		}
 
 		if (name == ATTRIBUTE_DIFFUSECOLOR) {
@@ -213,36 +219,71 @@ namespace IFC {
 				static_cast<float>(value[2].GetDouble()),
 				opacity);
 
-			return FString::Printf(
+			return MakeTuple(FString::Printf(
 				TEXT("\n\t\t%s: {%d}"),
 				UTF8_TO_TCHAR(COMPONENT(Material)),
-				CreateMaterial(world, rgba, offset));
+				CreateMaterial(world, rgba, offset)),
+				false);
 		}
 
 		if (name == ATTRIBUTE_VISIBILITY) {
 			bool invisible = value.HasMember(VISIBILITY_VISIBILITY) && value[VISIBILITY_VISIBILITY] == VISIBILITY_INVISIBLE;
 			FVector4f rgba(1, 1, 1, invisible ? 0 : 1);
 
-			return FString::Printf(
+			return MakeTuple(FString::Printf(
 				TEXT("\n\t\t%s: {%d}"),
 				UTF8_TO_TCHAR(COMPONENT(Material)),
-				CreateMaterial(world, rgba, defaultOffset));
+				CreateMaterial(world, rgba, defaultOffset)),
+				false);
 		}
 
-		return "";
+		if (name == ATTRIBUTE_SPACE_BOUNDARY) {
+			const rapidjson::Value* relatedElement = &value[ATTRIBUTE_RELATED_ELEMENT];
+			const rapidjson::Value* relatingSpace = &value[ATTRIBUTE_RELATING_SPACE];
+
+			FString result = FString::Printf(TEXT("\n\t\t%s"), UTF8_TO_TCHAR(COMPONENT(SpaceBoundary)));
+
+			if (relatedElement) {
+				FString ref;
+				if (TryExtractRefString(*relatedElement, ref)) {
+					const FString target = IFC::Scope() + TEXT(".") + MakeId(ref);
+					result += FString::Printf(
+						TEXT("\n\t\t(%s, %s)"),
+						UTF8_TO_TCHAR(COMPONENT(RelatedElement)),
+						*target);
+				}
+			}
+
+			if (relatingSpace) {
+				FString ref;
+				if (TryExtractRefString(*relatingSpace, ref)) {
+					const FString target = IFC::Scope() + TEXT(".") + MakeId(ref);
+					result += FString::Printf(
+						TEXT("\n\t\t(%s, %s)"),
+						UTF8_TO_TCHAR(COMPONENT(RelatingSpace)),
+						*target);
+				}
+			}
+
+			return MakeTuple(result, true);
+		}
+
+		return MakeTuple("", false);
 	}
 
-	TTuple<FString, FString> GetAttributes(flecs::world& world, const rapidjson::Value& object, const FString& objectPath) {
+	TTuple<FString, FString, FString> GetAttributes(flecs::world& world, const rapidjson::Value& object, const FString& objectPath) {
 		if (!object.HasMember(ATTRIBUTES_KEY) || !object[ATTRIBUTES_KEY].IsObject())
-			return MakeTuple(FString(), FString());
+			return MakeTuple(FString(), FString(), FString());
 
 		FString path = IFC::Scope() + "." + ATTRIBUTES_KEY + objectPath;
+		FString attributes = FString::Printf(TEXT("%s {\n"), *path);
+		FString relationships = attributes;
+		attributes += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
 
-		FString attributesEntity = FString::Printf(TEXT("%s {\n"), *path);
-		attributesEntity += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
+		bool hasRelationships = false;
 
-		const rapidjson::Value& attributes = object[ATTRIBUTES_KEY];
-		for (auto attribute = attributes.MemberBegin(); attribute != attributes.MemberEnd(); ++attribute) {
+		const rapidjson::Value& attributesObject = object[ATTRIBUTES_KEY];
+		for (auto attribute = attributesObject.MemberBegin(); attribute != attributesObject.MemberEnd(); ++attribute) {
 			const FString nameAndOwner = UTF8_TO_TCHAR(attribute->name.GetString());
 			FString owner, name;
 			nameAndOwner.Split(ATTRIBUTE_SEPARATOR, &owner, &name);
@@ -250,24 +291,34 @@ namespace IFC {
 			if (HasAttribute(ExcludeAttributes, name))
 				continue;
 
-			FString attributeEntities = "";
+			FString entities = "";
 
 			const rapidjson::Value& value = attribute->value;
 
-			FString processedAttribute = ProcessAttribute(world, name, value, attributes);
+			TTuple <FString, bool> data = ProcessAttribute(world, name, value, attributesObject);
+			FString attributeValue = data.Get<0>();
+			bool isRelationship = data.Get<1>();
 
-			if (!processedAttribute.IsEmpty())
-				attributeEntities += processedAttribute;
+			if (!attributeValue.IsEmpty()) // Processed attribute
+				entities += attributeValue;
 			else
-				attributeEntities += GetAttributeEntity(name, value);
+				entities += GetAttributeEntity(name, value);
 
-			attributesEntity += FString::Printf(TEXT("\t_ : %s {%s\n\t}\n"),
+			FString entity = FString::Printf(TEXT("\t_ : %s {%s\n\t}\n"),
 				*owner,
-				*attributeEntities);
+				*entities);
+
+			if (!isRelationship)
+				attributes += entity;
+			else {
+				relationships += entity;
+				hasRelationships = true;
+			}
 		}
 
-		attributesEntity += "\n}\n";
+		attributes += "\n}\n";
+		relationships += "\n}\n";
 
-		return MakeTuple(path, attributesEntity);
+		return MakeTuple(path, attributes, hasRelationships ? relationships : "");
 	}
 }

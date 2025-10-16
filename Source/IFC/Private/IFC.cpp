@@ -261,8 +261,11 @@ namespace IFC {
 					entities.Remove(MakeId(UTF8_TO_TCHAR(inherit.value.GetString())));
 		}
 
-		FString result;
 		FString attributeRelationship = ECS::NormalizedPath(world.try_get<AttributeRelationship>()->Value.path().c_str());
+
+		FString attributes;
+		FString relationships;
+		FString objects;
 
 		for (const rapidjson::Value* object : sorted) {
 			if (!object || !object->IsObject())
@@ -271,15 +274,17 @@ namespace IFC {
 			FString id = MakeId(UTF8_TO_TCHAR((*object)[PATH_KEY].GetString()));
 			bool isPrefab = !entities.Contains(id);
 
-			TTuple<FString, FString> attributes = GetAttributes(world, *object, *id);
+			TTuple<FString, FString, FString> data = GetAttributes(world, *object, *id);
 
-			FString attributesEntity = attributes.Get<1>();
-			result += attributesEntity;
+			FString attributesContainer = data.Get<1>();
+			attributes += attributesContainer;
+
+			relationships += data.Get<2>();
 
 			FString components = FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
 			if (isPrefab) {
-				if (!attributesEntity.IsEmpty())
-					components += FString::Printf(TEXT("\t(%s, %s)\n"), *attributeRelationship, *attributes.Get<0>());
+				if (!attributesContainer.IsEmpty())
+					components += FString::Printf(TEXT("\t(%s, %s)\n"), *attributeRelationship, *data.Get<0>());
 			} else {
 				components += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Root)));
 				components += FString::Printf(TEXT("\t%s: {\"%s\"}\n"), UTF8_TO_TCHAR(COMPONENT(Name)), *id);
@@ -287,7 +292,7 @@ namespace IFC {
 
 			const FString owner = (*object)[OWNER].GetString();
 
-			result += FString::Printf(TEXT("%s%s.%s%s {\n%s%s}\n"),
+			objects += FString::Printf(TEXT("%s%s.%s%s {\n%s%s}\n"),
 				isPrefab ? PREFAB : TEXT(""),
 				*IFC::Scope(),
 				*id,
@@ -295,7 +300,8 @@ namespace IFC {
 				*components,
 				*GetChildren(*object, isPrefab));
 		}
-		return result;
+
+		return attributes + objects + relationships;
 	}
 
 	void InjectOwner(rapidjson::Value& object, const FString& layerPath, rapidjson::Document::AllocatorType& allocator) {

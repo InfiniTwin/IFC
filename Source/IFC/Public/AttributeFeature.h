@@ -14,35 +14,45 @@ namespace IFC {
 	inline constexpr TCHAR TOKEN_VALUE[] = TEXT("[VALUE]");
 
 	constexpr const char* ATTRIBUTES_KEY = "attributes";
-
+	// Classes
+	constexpr const char* ATTRIBUTE_IFC_CLASS = "bsi::ifc::class";
+	constexpr const char* IFC_CLASS_CODE = "code";
+	constexpr const char* IFC_SPACE = "IfcSpace";
+	// Transform
 	constexpr const char* ATTRIBUTE_XFORMOP = "usd::xformop";
 	constexpr const char* ATTRIBUTE_TRANSFROM = "transform";
-
+	// Mesh
 	constexpr const char* ATTRIBUTE_MESH = "usd::usdgeom::mesh";
 	constexpr const char* MESH_INDICES = "faceVertexIndices";
 	constexpr const char* MESH_POINTS = "points";
-
+	// Material
 	constexpr const char* ATTRIBUTE_MATERIAL = "bsi::ifc::material";
 	constexpr const char* ATTRIBUTE_DIFFUSECOLOR = "bsi::ifc::presentation::diffuseColor";
 	constexpr const char* ATTRIBUTE_OPACITY = "bsi::ifc::presentation::opacity";
-
 	constexpr const char* ATTRIBUTE_VISIBILITY = "usd::usdgeom::visibility";
 	constexpr const char* VISIBILITY_VISIBILITY = "visibility";
 	constexpr const char* VISIBILITY_INVISIBLE = "invisible";
 
-	constexpr const char* ATTRIBUTE_IFC_CLASS = "bsi::ifc::class";
-	constexpr const char* IFC_CLASS_CODE = "code";
-	constexpr const char* IFC_SPACE = "IfcSpace";
+	// Relationships
+	constexpr const char* ATTRIBUTE_RELATED_ELEMENT = "relatedelement";
+	constexpr const char* ATTRIBUTE_SPACE_BOUNDARY = "bsi::ifc::spaceBoundary";
+	constexpr const char* ATTRIBUTE_RELATING_SPACE = "relatingspace";
+
 
 	static const TSet<FString> ExcludeAttributes = {
 		ATTRIBUTE_OPACITY,
 	};
 
+	struct AttributeRelationship { flecs::entity Value; };
+
 	struct Attribute {};
 	struct Value { FString Value; };
-	struct AttributeRelationship { flecs::entity Value; };
+
+	struct RelatedElement { flecs::entity Value; };
+	struct SpaceBoundary {};
+	struct RelatingSpace { flecs::entity Value; };
 
 	constexpr const char* ATTRIBUTE_SEPARATOR = "::";
 
-	TTuple<FString, FString> GetAttributes(flecs::world& world, const rapidjson::Value& object, const FString& objectPath);
+	TTuple<FString, FString, FString> GetAttributes(flecs::world& world, const rapidjson::Value& object, const FString& objectPath);
 }
