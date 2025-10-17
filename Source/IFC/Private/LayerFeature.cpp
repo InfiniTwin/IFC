@@ -6,7 +6,6 @@
 #include "ECS.h"
 #include "rapidjson/document.h"
 #include "rapidjson/error/en.h"
-#include "rapidjson/writer.h"
 
 namespace IFC {
 	void LayerFeature::CreateComponents(flecs::world& world) {

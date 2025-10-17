@@ -130,7 +130,7 @@ namespace IFC {
 
 			result += FString::Printf(TEXT("\t%s%s: %s, %s {%s}\n"),
 				isPrefab ? PREFAB : TEXT(""),
-				*name,
+				*(name + IFC::MakeId(FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens))),
 				*inheritance,
 				*owner,
 				*nameComponent);
