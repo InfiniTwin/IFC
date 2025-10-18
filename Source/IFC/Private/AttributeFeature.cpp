@@ -20,11 +20,28 @@ namespace IFC {
 		world.component<Attribute>().add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<Value>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
 
+		// Entities
+		world.component<Alignment>();
+		world.component<AlignmentCant>();
+		world.component<AlignmentHorizontal>();
+		world.component<AlignmentSegment>();
+		world.component<AlignmentVertical>();
+		world.component<Building>();
+		world.component<BuildingStorey>();
+		world.component<Project>();
+		world.component<Railway>();
+		world.component<Referent>();
+		world.component<Signal>();
+		world.component<Site>();
+		world.component<Space>();
+		world.component<Wall>();
+		world.component<Window>();
+
+		// Relationships
 		world.component<SpaceBoundary>();
 		world.component<RelatedElement>();
 		world.component<RelatingSpace>();
-
-		world.component<Alignment>();
+		world.component<Segment>();
 	}
 
 	void AttributeFeature::Initialize(flecs::world& world) {
@@ -268,6 +285,13 @@ namespace IFC {
 			}
 
 			return MakeTuple(result, true);
+		}
+
+		if (name == ATTRIBUTE_IFC_CLASS) {
+			FString result = GetAttributeEntity(ATTRIBUTE_TRANSFROM, value);
+			FString entity = UTF8_TO_TCHAR(value[IFC_CLASS_CODE].GetString());
+			result += FString::Printf(TEXT("\n\t\t%s"), *entity.RightChop(3));
+			return MakeTuple(result, false);
 		}
 
 		return MakeTuple("", false);

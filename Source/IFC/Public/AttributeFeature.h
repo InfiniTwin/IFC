@@ -32,12 +32,11 @@ namespace IFC {
 	constexpr const char* ATTRIBUTE_VISIBILITY = "usd::usdgeom::visibility";
 	constexpr const char* VISIBILITY_VISIBILITY = "visibility";
 	constexpr const char* VISIBILITY_INVISIBLE = "invisible";
-
 	// Relationships
 	constexpr const char* ATTRIBUTE_SPACE_BOUNDARY = "bsi::ifc::spaceBoundary";
 	constexpr const char* RELATED_ELEMENT = "relatedelement";
 	constexpr const char* RELATING_SPACE = "relatingspace";
-	
+
 	constexpr const char* ATTRIBUTE_ALIGNMENT = "bsi::ifc::alignment";
 
 
@@ -50,11 +49,28 @@ namespace IFC {
 	struct Attribute {};
 	struct Value { FString Value; };
 
+	// Entities
+	struct Alignment {};
+	struct AlignmentCant {};
+	struct AlignmentHorizontal {};
+	struct AlignmentSegment {};
+	struct AlignmentVertical {};
+	struct Building {};
+	struct BuildingStorey {};
+	struct Project {};
+	struct Railway {};
+	struct Referent {};
+	struct Signal {};
+	struct Site {};
+	struct Space {};
+	struct Wall {};
+	struct Window {};
+
+	// Relationships
 	struct SpaceBoundary {};
 	struct RelatedElement { flecs::entity Value; };
 	struct RelatingSpace { flecs::entity Value; };
-
-	struct Alignment { flecs::entity Value; };
+	struct Segment { flecs::entity Value; };
 
 	constexpr const char* ATTRIBUTE_SEPARATOR = "::";
 
