@@ -57,6 +57,7 @@ namespace IFC {
 		ModelFeature::CreateObservers(world);
 
 		AttributeFeature::Initialize(world);
+		ModelFeature::Initialize(world);
 	}
 
 	FString Clean(const FString& in) {
