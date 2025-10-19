@@ -4,6 +4,7 @@
 
 #include <flecs.h>
 #include "rapidjson/document.h"
+#include "ECS.h"
 
 namespace IFC {
 	struct AttributeFeature {
@@ -14,6 +15,8 @@ namespace IFC {
 	inline constexpr TCHAR TOKEN_VALUE[] = TEXT("[VALUE]");
 
 	constexpr const char* ATTRIBUTES_KEY = "attributes";
+	constexpr const char* ATTRIBUTE_SEPARATOR = "::";
+
 	// Classes
 	constexpr const char* ATTRIBUTE_IFC_CLASS = "bsi::ifc::class";
 	constexpr const char* IFC_CLASS_CODE = "code";
@@ -36,14 +39,8 @@ namespace IFC {
 	constexpr const char* ATTRIBUTE_SPACE_BOUNDARY = "bsi::ifc::spaceBoundary";
 	constexpr const char* RELATED_ELEMENT = "relatedelement";
 	constexpr const char* RELATING_SPACE = "relatingspace";
-
-	constexpr const char* ATTRIBUTE_ALIGNMENT = "bsi::ifc::alignment";
-
-
-	static const TSet<FString> ExcludeAttributes = {
-		ATTRIBUTE_OPACITY,
-		ATTRIBUTE_ALIGNMENT
-	};
+	constexpr const char* PART_OF_SYSTEM = "bsi::ifc::system::partofsystem";
+	constexpr const char* CONNECTS_TO = "bsi::ifc::system::connectsto";
 
 	struct AttributeRelationship { flecs::entity Value; };
 
@@ -56,14 +53,21 @@ namespace IFC {
 	struct AlignmentHorizontal {};
 	struct AlignmentSegment {};
 	struct AlignmentVertical {};
+	struct Boiler {};
 	struct Building {};
 	struct BuildingStorey {};
+	struct DistributionPort {};
+	struct PipeFitting {};
+	struct PipeSegment {};
 	struct Project {};
 	struct Railway {};
 	struct Referent {};
+	struct SanitaryTerminal {};
 	struct Signal {};
 	struct Site {};
+	struct Slab {};
 	struct Space {};
+	struct Valve {};
 	struct Wall {};
 	struct Window {};
 
@@ -71,8 +75,26 @@ namespace IFC {
 	struct SpaceBoundary {};
 	struct RelatedElement { flecs::entity Value; };
 	struct RelatingSpace { flecs::entity Value; };
+	struct PartOfSystem { flecs::entity Value; };
+	struct ConnectsTo { flecs::entity Value; };
 
-	constexpr const char* ATTRIBUTE_SEPARATOR = "::";
+	// Enums
+	enum FlowDirection {
+		SOURCE,
+		SINK,
+		SOURCEANDSINK,
+		NOTDEFINED
+	};
+
+	static const TSet<FString> ExcludeAttributes = {
+		ATTRIBUTE_OPACITY,
+		"bsi::ifc::alignment",
+		PART_OF_SYSTEM
+	};
+
+	static const TMap<FString, FString> EnumAttributes = {
+		{"bsi::ifc::system::flowdirection", COMPONENT(FlowDirection)}
+	};
 
 	TTuple<FString, FString, FString> GetAttributes(flecs::world& world, const rapidjson::Value& object, const FString& objectPath);
 }

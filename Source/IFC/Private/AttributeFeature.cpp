@@ -26,14 +26,21 @@ namespace IFC {
 		world.component<AlignmentHorizontal>();
 		world.component<AlignmentSegment>();
 		world.component<AlignmentVertical>();
+		world.component<Boiler>();
 		world.component<Building>();
 		world.component<BuildingStorey>();
+		world.component<DistributionPort>();
+		world.component<PipeFitting>();
+		world.component<PipeSegment>();
 		world.component<Project>();
 		world.component<Railway>();
 		world.component<Referent>();
+		world.component<SanitaryTerminal>();
 		world.component<Signal>();
 		world.component<Site>();
+		world.component<Slab>();
 		world.component<Space>();
+		world.component<Valve>();
 		world.component<Wall>();
 		world.component<Window>();
 
@@ -41,6 +48,11 @@ namespace IFC {
 		world.component<SpaceBoundary>();
 		world.component<RelatedElement>();
 		world.component<RelatingSpace>();
+		world.component<PartOfSystem>();
+		world.component<ConnectsTo>();
+
+		// Enums
+		world.component<FlowDirection>().add(flecs::Exclusive);
 	}
 
 	void AttributeFeature::Initialize(flecs::world& world) {
@@ -72,36 +84,8 @@ namespace IFC {
 	}
 
 	static FString GetValueAsString(const rapidjson::Value& value) {
-		// 1) Plain string
 		if (value.IsString())
 			return ECS::CleanCode(UTF8_TO_TCHAR(value.GetString()));
-
-		// 2) Single { "ref": "..." }
-		if (value.IsObject() && value.MemberCount() == 1) {
-			FString refString;
-			if (TryExtractRefString(value, refString))
-				return ECS::CleanCode(refString);
-		}
-
-		// 3) Array of { "ref": "..." }
-		if (value.IsArray()) {
-			TArray<FString> refs;
-			refs.Reserve(static_cast<int32>(value.Size()));
-
-			for (auto& elem : value.GetArray()) {
-				FString refString;
-				if (TryExtractRefString(elem, refString))
-					refs.Add(ECS::CleanCode(refString));
-			}
-
-			if (refs.Num() > 0) {
-				TArray<FString> quoted;
-				quoted.Reserve(refs.Num());
-				for (const FString& s : refs)
-					quoted.Add(FString::Printf(TEXT("%s"), *s));
-				return FString::Printf(TEXT("%s"), *FString::Join(quoted, TEXT(",")));
-			}
-		}
 
 		return ECS::CleanCode(JsonValueToString(value));
 	}
@@ -116,27 +100,58 @@ namespace IFC {
 			const FString childValue = GetValueAsString(child->value);
 
 			result += TEXT("\n\t\t_ {");
-			result += FString::Printf(TEXT("\n\t\t\t%s: {\"%s\"}"), UTF8_TO_TCHAR(COMPONENT(Name)), *childName);
-			result += FString::Printf(TEXT("\n\t\t\t%s: {\"%s\"}"), UTF8_TO_TCHAR(COMPONENT(Value)), *childValue);
+			result += FString::Printf(TEXT("\n\t\t\t%s: {\"%s\"}"),
+				UTF8_TO_TCHAR(COMPONENT(Name)),
+				*childName);
+			result += FString::Printf(TEXT("\n\t\t\t%s: {\"%s\"}"),
+				UTF8_TO_TCHAR(COMPONENT(Value)),
+				*childValue);
 			result += TEXT("\n\t\t}");
 		}
 		return result;
 	}
 
 	static FString GetAttributeNameAndValue(const FString& name, const rapidjson::Value& value) {
-		FString result = FString::Printf(TEXT("\n\t\t%s: {\"%s\"}"), UTF8_TO_TCHAR(COMPONENT(Name)), *name);
+		FString result = FString::Printf(TEXT("\n\t\t%s: {\"%s\"}"),
+			UTF8_TO_TCHAR(COMPONENT(Name)),
+			*name);
 
 		if (!value.IsObject())
-			result += FString::Printf(TEXT("\n\t\t%s: {\"%s\"}"), UTF8_TO_TCHAR(COMPONENT(Value)), *GetValueAsString(value));
+			result += FString::Printf(TEXT("\n\t\t%s: {\"%s\"}"),
+				UTF8_TO_TCHAR(COMPONENT(Value)),
+				*GetValueAsString(value));
 
 		return result;
 	}
 
-	FString GetAttributeEntity(const FString& name, const rapidjson::Value& value) {
+	static FString GetAttributeEntity(const FString& name, const rapidjson::Value& value) {
 		FString entity = FString::Printf(TEXT("\n\t\t%s"), UTF8_TO_TCHAR(COMPONENT(Attribute)));
 		entity += GetAttributeNameAndValue(name, value);
 		entity += GetAttributeNestedNameAndValue(value);
 		return entity;
+	}
+
+	static FString ProcessRelationship(const FString& relationship, const rapidjson::Value& value) {
+		FString result;
+
+		auto addRef = [&](const FString& refStr) {
+			const FString target = IFC::Scope() + TEXT(".") + MakeId(refStr);
+			result += FString::Printf(TEXT("\n\t\t(%s, %s)"),
+				*relationship,
+				*target);
+		};
+
+		if (value.IsArray() && value.Size() > 0) { // Array of refs (only first element)
+			const auto& refObj = value[0];
+			if (refObj.HasMember("ref") && refObj["ref"].IsString())
+				addRef(UTF8_TO_TCHAR(refObj["ref"].GetString()));
+		} else if (value.IsObject()) { // Single ref
+			FString ref;
+			if (TryExtractRefString(value, ref))
+				addRef(ref);
+		}
+
+		return result;
 	}
 
 	TTuple<FString, bool> ProcessAttribute(flecs::world& world, const FString& name, const rapidjson::Value& value, const rapidjson::Value& attributes) {
@@ -154,18 +169,15 @@ namespace IFC {
 			const FRotator rotation = transform.Rotator();
 			const FVector scale = transform.GetScale3D();
 
-			FString result = FString::Printf(
-				TEXT("\n\t\t%s: {{%.6f, %.6f, %.6f}}"),
+			FString result = FString::Printf(TEXT("\n\t\t%s: {{%.6f, %.6f, %.6f}}"),
 				UTF8_TO_TCHAR(COMPONENT(Position)),
 				position.X, position.Y, position.Z);
 
-			result += FString::Printf(
-				TEXT("\n\t\t%s: {{%.6f, %.6f, %.6f}}"),
+			result += FString::Printf(TEXT("\n\t\t%s: {{%.6f, %.6f, %.6f}}"),
 				UTF8_TO_TCHAR(COMPONENT(Rotation)),
 				rotation.Pitch, rotation.Yaw, rotation.Roll);
 
-			result += FString::Printf(
-				TEXT("\n\t\t%s: {{%.6f, %.6f, %.6f}}"),
+			result += FString::Printf(TEXT("\n\t\t%s: {{%.6f, %.6f, %.6f}}"),
 				UTF8_TO_TCHAR(COMPONENT(Scale)),
 				scale.X, scale.Y, scale.Z);
 
@@ -207,8 +219,7 @@ namespace IFC {
 					static_cast<float>(point[1].GetDouble()),
 					static_cast<float>(point[2].GetDouble())));
 
-			return MakeTuple(FString::Printf(
-				TEXT("\n\t\t%s: {%d}"),
+			return MakeTuple(FString::Printf(TEXT("\n\t\t%s: {%d}"),
 				UTF8_TO_TCHAR(COMPONENT(Mesh)),
 				CreateMesh(world, points, indices)),
 				false);
@@ -237,8 +248,7 @@ namespace IFC {
 				static_cast<float>(value[2].GetDouble()),
 				opacity);
 
-			return MakeTuple(FString::Printf(
-				TEXT("\n\t\t%s: {%d}"),
+			return MakeTuple(FString::Printf(TEXT("\n\t\t%s: {%d}"),
 				UTF8_TO_TCHAR(COMPONENT(Material)),
 				CreateMaterial(world, rgba, offset)),
 				false);
@@ -248,46 +258,33 @@ namespace IFC {
 			bool invisible = value.HasMember(VISIBILITY_VISIBILITY) && value[VISIBILITY_VISIBILITY] == VISIBILITY_INVISIBLE;
 			FVector4f rgba(1, 1, 1, invisible ? 0 : 1);
 
-			return MakeTuple(FString::Printf(
-				TEXT("\n\t\t%s: {%d}"),
+			return MakeTuple(FString::Printf(TEXT("\n\t\t%s: {%d}"),
 				UTF8_TO_TCHAR(COMPONENT(Material)),
 				CreateMaterial(world, rgba, defaultOffset)),
 				false);
 		}
 
 		if (name == ATTRIBUTE_SPACE_BOUNDARY) {
-			const rapidjson::Value* relatedElement = &value[RELATED_ELEMENT];
-			const rapidjson::Value* relatingSpace = &value[RELATING_SPACE];
-
 			FString result = FString::Printf(TEXT("\n\t\t%s"), UTF8_TO_TCHAR(COMPONENT(SpaceBoundary)));
-
-			if (relatedElement) {
-				FString ref;
-				if (TryExtractRefString(*relatedElement, ref)) {
-					const FString target = IFC::Scope() + TEXT(".") + MakeId(ref);
-					result += FString::Printf(
-						TEXT("\n\t\t(%s, %s)"),
-						UTF8_TO_TCHAR(COMPONENT(RelatedElement)),
-						*target);
-				}
-			}
-
-			if (relatingSpace) {
-				FString ref;
-				if (TryExtractRefString(*relatingSpace, ref)) {
-					const FString target = IFC::Scope() + TEXT(".") + MakeId(ref);
-					result += FString::Printf(
-						TEXT("\n\t\t(%s, %s)"),
-						UTF8_TO_TCHAR(COMPONENT(RelatingSpace)),
-						*target);
-				}
-			}
-
+			result += ProcessRelationship(COMPONENT(RelatedElement), value[RELATED_ELEMENT]);
+			result += ProcessRelationship(COMPONENT(RelatingSpace), value[RELATING_SPACE]);
 			return MakeTuple(result, true);
 		}
 
+		if (name == PART_OF_SYSTEM)
+			return MakeTuple(ProcessRelationship(COMPONENT(PartOfSystem), value), true);
+
+		if (name == CONNECTS_TO)
+			return MakeTuple(ProcessRelationship(COMPONENT(ConnectsTo), value), true);
+
+		if (const FString* enumAttribute = EnumAttributes.Find(name))
+			return MakeTuple(FString::Printf(TEXT("\n\t\t(%s, %s)"),
+				**enumAttribute,
+				UTF8_TO_TCHAR(value.GetString())),
+				false);
+
 		if (name == ATTRIBUTE_IFC_CLASS) {
-			FString result = GetAttributeEntity(ATTRIBUTE_TRANSFROM, value);
+			FString result = GetAttributeEntity(ATTRIBUTE_IFC_CLASS, value);
 			FString entity = UTF8_TO_TCHAR(value[IFC_CLASS_CODE].GetString());
 			result += FString::Printf(TEXT("\n\t\t%s"), *entity.RightChop(3));
 			return MakeTuple(result, false);
