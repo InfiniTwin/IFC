@@ -41,7 +41,6 @@ namespace IFC {
 		world.component<SpaceBoundary>();
 		world.component<RelatedElement>();
 		world.component<RelatingSpace>();
-		world.component<Segment>();
 	}
 
 	void AttributeFeature::Initialize(flecs::world& world) {

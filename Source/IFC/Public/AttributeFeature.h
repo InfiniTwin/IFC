@@ -42,6 +42,7 @@ namespace IFC {
 
 	static const TSet<FString> ExcludeAttributes = {
 		ATTRIBUTE_OPACITY,
+		ATTRIBUTE_ALIGNMENT
 	};
 
 	struct AttributeRelationship { flecs::entity Value; };
@@ -70,7 +71,6 @@ namespace IFC {
 	struct SpaceBoundary {};
 	struct RelatedElement { flecs::entity Value; };
 	struct RelatingSpace { flecs::entity Value; };
-	struct Segment { flecs::entity Value; };
 
 	constexpr const char* ATTRIBUTE_SEPARATOR = "::";
 
