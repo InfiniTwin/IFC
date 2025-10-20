@@ -3,6 +3,7 @@
 
 #include "AttributeFeature.h"
 #include "IFC.h"
+#include "LayerFeature.h"
 #include "ECS.h"
 #include "ModelFeature.h"
 #include "rapidjson/document.h"
@@ -15,7 +16,7 @@ namespace IFC {
 
 	void AttributeFeature::CreateComponents(flecs::world& world) {
 		using namespace ECS;
-		world.component<AttributeRelationship>().add(flecs::Singleton);
+		world.component<AttributesRelationship>().add(flecs::Singleton);
 
 		world.component<Attribute>().add(flecs::OnInstantiate, flecs::Inherit);
 		world.component<Value>().member<FString>(VALUE).add(flecs::OnInstantiate, flecs::Inherit);
@@ -56,7 +57,28 @@ namespace IFC {
 	}
 
 	void AttributeFeature::Initialize(flecs::world& world) {
-		world.set<AttributeRelationship>({ world.entity() });
+		world.set<AttributesRelationship>({ world.entity(ATTRIBUTES_RELATIONSHIP) });
+	}
+
+	TArray<flecs::entity> GetAttributes(flecs::world& world, flecs::entity ifcObject) {
+		TMap<FString, flecs::entity> uniqueAttributes;
+		int32_t index = 0;
+		while (flecs::entity attributes = ifcObject.target(world.try_get<AttributesRelationship>()->Value, index++)) {
+			attributes.children([&](flecs::entity attribute) {
+				if (!attribute.has<Attribute>()) return;
+
+				FString key = FString::Printf(TEXT("%llu|%s|%s"),
+					(uint64)attribute.id(),
+					*attribute.try_get<Name>()->Value,
+					*attribute.try_get<Owner>()->Value);
+
+				uniqueAttributes.Add(key, attribute);
+			});
+		}
+
+		TArray<flecs::entity> result;
+		uniqueAttributes.GenerateValueArray(result);
+		return result;
 	}
 
 	using namespace rapidjson;

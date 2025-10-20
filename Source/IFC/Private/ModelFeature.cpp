@@ -50,11 +50,11 @@ namespace IFC {
 	}
 
 	int32 FindMaterial(flecs::world& world, flecs::entity ifcObject) {
-		auto attributeRelationship = world.try_get<AttributeRelationship>()->Value;
+		auto attributesRel = world.try_get<AttributesRelationship>()->Value;
 
 		for (flecs::entity current = ifcObject; current.is_valid(); current = current.parent())
 			for (int32_t i = 0;; i++) {
-				flecs::entity attributes = current.target(attributeRelationship, i);
+				flecs::entity attributes = current.target(attributesRel, i);
 				if (!attributes.is_valid())
 					break;
 
@@ -94,10 +94,10 @@ namespace IFC {
 			.with<IfcObject>()
 			.event(flecs::OnAdd)
 			.each([&](flecs::entity ifcObject) {
-			auto attributeRelationship = world.try_get<AttributeRelationship>()->Value;
+			auto attributesRel = world.try_get<AttributesRelationship>()->Value;
 			int32 meshId = INDEX_NONE;
 			int32_t i = 0;
-			while (flecs::entity attributes = ifcObject.target(attributeRelationship, i++))
+			while (flecs::entity attributes = ifcObject.target(attributesRel, i++))
 				attributes.children([&](flecs::entity attribute) {
 				if (attribute.has<Mesh>())
 					meshId = attribute.try_get<Mesh>()->Value;
@@ -117,7 +117,7 @@ namespace IFC {
 				FVector scale = FVector::OneVector;
 
 				i = 0;
-				while (flecs::entity attributes = current.target(attributeRelationship, i++)) {
+				while (flecs::entity attributes = current.target(attributesRel, i++)) {
 					attributes.children([&](flecs::entity attribute) {
 						if (attribute.has<Position>())
 							position = attribute.try_get<Position>()->Value;

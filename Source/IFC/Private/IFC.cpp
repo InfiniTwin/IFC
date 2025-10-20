@@ -262,7 +262,7 @@ namespace IFC {
 					entities.Remove(MakeId(UTF8_TO_TCHAR(inherit.value.GetString())));
 		}
 
-		FString attributeRelationship = ECS::NormalizedPath(world.try_get<AttributeRelationship>()->Value.path().c_str());
+		FString attributesRel = ECS::NormalizedPath(world.try_get<AttributesRelationship>()->Value.path().c_str());
 
 		FString attributes;
 		FString relationships;
@@ -287,7 +287,7 @@ namespace IFC {
 			FString components = FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(IfcObject)));
 			if (isPrefab) {
 				if (!attributesContainer.IsEmpty())
-					components += FString::Printf(TEXT("\t(%s, %s)\n"), *attributeRelationship, *data.Get<0>());
+					components += FString::Printf(TEXT("\t(%s, %s)\n"), *attributesRel, *data.Get<0>());
 			} else {
 				components += FString::Printf(TEXT("\t%s\n"), UTF8_TO_TCHAR(COMPONENT(Root)));
 				world.try_get<QueryLayers>()->Value.each([&owner, &components](flecs::entity layer) {

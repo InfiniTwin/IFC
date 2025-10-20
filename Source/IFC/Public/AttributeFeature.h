@@ -14,6 +14,7 @@ namespace IFC {
 
 	inline constexpr TCHAR TOKEN_VALUE[] = TEXT("[VALUE]");
 
+	constexpr const char* ATTRIBUTES_RELATIONSHIP = "Attributes";
 	constexpr const char* ATTRIBUTES_KEY = "attributes";
 	constexpr const char* ATTRIBUTE_SEPARATOR = "::";
 
@@ -42,7 +43,7 @@ namespace IFC {
 	constexpr const char* PART_OF_SYSTEM = "bsi::ifc::system::partofsystem";
 	constexpr const char* CONNECTS_TO = "bsi::ifc::system::connectsto";
 
-	struct AttributeRelationship { flecs::entity Value; };
+	struct AttributesRelationship { flecs::entity Value; };
 
 	struct Attribute {};
 	struct Value { FString Value; };
@@ -96,5 +97,6 @@ namespace IFC {
 		{"bsi::ifc::system::flowdirection", COMPONENT(FlowDirection)}
 	};
 
+	IFC_API TArray<flecs::entity> GetAttributes(flecs::world& world, flecs::entity ifcObject);
 	TTuple<FString, FString, FString> GetAttributes(flecs::world& world, const rapidjson::Value& object, const FString& objectPath);
 }
